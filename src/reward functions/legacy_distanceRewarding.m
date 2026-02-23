@@ -12,62 +12,404 @@ function [reward, rewardVector, action] = legacy_distanceRewarding(this, action)
 % - Solo: minimizar error entre posFlex y flexConv(t)
 % ===========================
 
-% ---- (1) Obtener referencia del dataset en este step: flexConv
+% % ---- (1) Obtener referencia del dataset en este step: flexConv
+% if this.c == 1
+%     flexConv = this.flexJoined_scaler(reduceFlexDimension(this.flexData));
+% else
+%     flexConv = this.flexConvertedLog{this.c - 1};
+% end
+% 
+% % ---- (2) Obtener estado actual de motores y convertir a flex normalizada: posFlex
+% pos = this.motorData(end, :);
+% posFlex = this.flexJoined_scaler(encoder2Flex(pos));
+% 
+% % ---- (3) Error por motor (tracking): diff = posFlex - target
+% diff = posFlex - flexConv(end, :);      % 1x4
+% 
+% % ---- (4) Métrica escalar del error (baseline): MSE (mean squared error)
+% mse = mean(diff.^2);                    % escalar
+% %%%%%%%%%%%%%%%%%%%------------------------------------------%%%%%%%%%%%%%%
+% %--------------------------------------------------------------------------
+% meanAbsDist = mean(abs(diff));  % más interpretable que mse
+% %--------------------------------------------------------------------------
+% %%%%%%%%%%%%%%%%%%%------------------------------------------%%%%%%%%%%%%%%
+% 
+% % ---- (5) Reward base: negativo del error (minimizar mse)
+% k_d = 1.0;                              % escala inicial (igual que opts.k en v5)
+% rewardRaw = -k_d * mse;                 % escalar
+% 
+% % ---- (6) Sin clipping en v0 (para ver comportamiento real del error)
+% reward = rewardRaw;
+% 
+% % ---- (7) rewardVector (para compatibilidad): descomposición por motor
+% % Aquí lo hacemos como contribución negativa por motor (opcional, pero útil)
+% rewardVector = -k_d * (diff.^2);        % 1x4
+% 
+% % ---- (8) DEBUG (opcional)
+% if this.c == 1
+%     fprintf("---- NEW EP (v0) ----\n");
+% end
+% if mod(this.c,10)==0
+%     distanceAbs = abs(diff);
+%     meanAbsDist = mean(distanceAbs);
+%     fprintf("c=%d reward=%.6f mse=%.6f | meanAbsDist=%.4f | minAbsDist=%.4f\n", ...
+%         this.c, reward, mse, meanAbsDist, min(distanceAbs));
+% end
+% 
+% % Guardar métricas en el entorno
+% this.meanDistStep = meanAbsDist;
+% this.mseStep = mse;
+% this.successStep = all(abs(diff) < 0.03);
+% 
+% end
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+ 
+ 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%      VERSION v0.1   %%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
+
+%function [reward, rewardVector, action] = reward_v01_tracking_progress(this, action, ~)
+% ===========================
+% Reward v0.1: Tracking + Progreso
+% - Base: -k_d * mse
+% - Progreso: k_p * (mse_prev - mse) con clamp
+% - Sin PBRS, sin bonuses, sin tanh
+% - Registra métricas: meanDistStep, mseStep, successStep
+% ===========================
+
+% persistent prevMSE
+% 
+% % ---- RESET por episodio
+% % this.c es el contador de steps dentro del episodio (tu Env lo usa así)
+% if this.c == 1
+%     prevMSE = NaN;   % evita castigo artificial en el primer step
+% end
+% 
+% % ---- (1) Referencia del dataset (q_ref) en este step
+% % Nota: en tu implementación, flexConv(end,:) es el target de los 4 motores
+% if this.c == 1
+%     flexConv = this.flexJoined_scaler(reduceFlexDimension(this.flexData));
+% else
+%     flexConv = this.flexConvertedLog{this.c - 1};
+% end
+% 
+% q_ref = flexConv(end, :);   % 1x4
+% 
+% % ---- (2) Estado actual (q) desde encoders
+% pos = this.motorData(end, :);
+% q   = this.flexJoined_scaler(encoder2Flex(pos));   % 1x4
+% 
+% % ---- (3) Error y métricas
+% diff = q - q_ref;                % 1x4
+% mse  = mean(diff.^2);            % escalar (tracking loss)
+% meanAbsDist = mean(abs(diff));   % escalar (interpretación directa)
+% successStep = all(abs(diff) < 0.03);
+% 
+% % ---- Guardar métricas en el entorno (para logs en step.m)
+% this.meanDistStep = meanAbsDist;
+% this.mseStep      = mse;
+% this.successStep  = successStep;
+% 
+% % ---- (4) Término base (tracking)
+% k_d = 1.0;
+% baseTerm = -k_d * mse;
+% 
+% % ---- (5) Progreso temporal
+% k_p = 80;  % punto de partida (si hay mucha varianza baja a 40-60)
+% if isnan(prevMSE)
+%     progressTerm = 0;
+% else
+%     progressTerm = k_p * (prevMSE - mse);
+% end
+% prevMSE = mse;
+% 
+% % Clamp del progreso para estabilidad (muy importante)
+% progressTerm = max(min(progressTerm, 5), -5);
+% 
+% % ---- (6) Reward total
+% rewardRaw = baseTerm + progressTerm;
+% reward = rewardRaw;
+% 
+% % ---- (7) rewardVector (por motor) para compatibilidad/diagnóstico
+% % contribución negativa por motor (error cuadrático por articulación)
+% rewardVector = -k_d * (diff.^2);
+% 
+% % ---- Debug opcional (cada 10 steps)
+% % if this.c == 1
+% %     fprintf("---- NEW EP (v0.1) ----\n");
+% % end
+% % if mod(this.c,10)==0
+% %     fprintf("c=%d base=%.6f prog=%.3f total=%.6f | mse=%.6f | meanAbsDist=%.4f | succ=%d\n", ...
+% %         this.c, baseTerm, progressTerm, reward, mse, meanAbsDist, successStep);
+% % end
+% 
+% end
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%% VERSION 1 PBRS + CLIPPING  %%%%%%%%%%%%%%%%%
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
+%function [reward, rewardVector, action] = reward_v1_pbrs_minimal(this, action, ~)
+% ==========================================================
+% Reward v1 (Minimal): Tracking + PBRS + Smooth Clipping
+% ----------------------------------------------------------
+% r = -k_d * mse  +  k_s * (gamma*Phi(s') - Phi(s))
+% Phi(s) = -log(1 + mse)
+% reward = L * tanh(r_raw / L)
+%
+% - Sin bonuses heurísticos (precisión/estabilidad/etc.)
+% - Sin término de progreso explícito (ya va implícito en PBRS)
+% - Registra métricas: meanDistStep, mseStep, successStep
+% ==========================================================
+
+% persistent prevPhi
+% 
+% % ---- RESET por episodio
+% if this.c == 1
+%     prevPhi = 0;
+% end
+% 
+% % ---- (1) Referencia (q_ref) del dataset en este step
+% if this.c == 1
+%     flexConv = this.flexJoined_scaler(reduceFlexDimension(this.flexData));
+% else
+%     flexConv = this.flexConvertedLog{this.c - 1};
+% end
+% q_ref = flexConv(end, :);  % 1x4
+% 
+% % ---- (2) Estado actual (q) desde encoders
+% pos = this.motorData(end, :);
+% q   = this.flexJoined_scaler(encoder2Flex(pos));  % 1x4
+% 
+% % ---- (3) Error y métricas
+% diff = q - q_ref;              % 1x4
+% mse  = mean(diff.^2);          % escalar
+% meanAbsDist = mean(abs(diff)); % escalar (más interpretable)
+% successStep = all(abs(diff) < 0.03);
+% 
+% % ---- Guardar métricas en el entorno (para logs en step.m)
+% this.meanDistStep = meanAbsDist;
+% this.mseStep      = mse;
+% this.successStep  = successStep;
+% 
+% % ---- (4) Parámetros (iniciales recomendados)
+% k_d   = 1.0;    % peso del tracking (base)
+% gamma = 0.99;   % para PBRS
+% k_s   = 10;     % peso del shaping PBRS (sube a 20 si señal débil)
+% L     = 10;     % límite de clipping suave (10 o 20)
+% 
+% % ---- (5) Término base (tracking)
+% baseTerm = -k_d * mse;
+% 
+% % ---- (6) Potencial y PBRS
+% phi = -log(1 + mse);                 % Phi(s')
+% shapingTerm = k_s * (gamma*phi - prevPhi);
+% prevPhi = phi;
+% 
+% % ---- (7) Reward total + clipping suave
+% rewardRaw = baseTerm + shapingTerm;
+% reward = L * tanh(rewardRaw / L);
+% 
+% % ---- (8) rewardVector (por motor) para compatibilidad/diagnóstico
+% rewardVector = -k_d * (diff.^2);     % contribución negativa por articulación
+% 
+% % ---- Debug opcional (cada 10 steps)
+% % if this.c == 1
+% %     fprintf("---- NEW EP (v1 PBRS minimal) ----\n");
+% % end
+% % if mod(this.c,10)==0
+% %     fprintf("c=%d base=%.6f shape=%.6f raw=%.6f final=%.6f | mse=%.6f | meanAbs=%.4f | succ=%d\n", ...
+% %         this.c, baseTerm, shapingTerm, rewardRaw, reward, mse, meanAbsDist, successStep);
+% % end
+% 
+% end
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% %%%%%%%%%%%%% VERSION 1.1 PBRS + CLIPPING + BONUS POR PREPOSICION    %%%%%%%%%%%%%
+% % %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
+% %function [reward, rewardVector, action] = reward_v11_pbrs_precision(this, action, ~)
+% % ==========================================================
+% % Reward v1.1: Stronger Tracking + PBRS + Soft Precision Bonus + Clipping
+% % ----------------------------------------------------------
+% % r = -k_d*mse + k_s*(gamma*Phi(s') - Phi(s)) + k_prec*exp(-alpha*mse)
+% % Phi(s) = -log(1 + mse)
+% % reward = L * tanh(r_raw / L)
+% %
+% % - Mantiene estabilidad (clipping)
+% % - Aumenta presión por reducir error (k_d alto)
+% % - Añade empuje suave hacia precisión fina (bonus continuo)
+% % - Registra métricas: meanDistStep, mseStep, successStep
+% % ==========================================================
+% 
+% persistent prevPhi
+% 
+% % ---- RESET por episodio
+% if this.c == 1
+%     prevPhi = 0;
+% end
+% 
+% % ---- (1) Referencia (q_ref) del dataset en este step
+% if this.c == 1
+%     flexConv = this.flexJoined_scaler(reduceFlexDimension(this.flexData));
+% else
+%     flexConv = this.flexConvertedLog{this.c - 1};
+% end
+% q_ref = flexConv(end, :);  % 1x4
+% 
+% % ---- (2) Estado actual (q) desde encoders
+% pos = this.motorData(end, :);
+% q   = this.flexJoined_scaler(encoder2Flex(pos));  % 1x4
+% 
+% % ---- (3) Error y métricas
+% diff = q - q_ref;              % 1x4
+% mse  = mean(diff.^2);          % escalar
+% meanAbsDist = mean(abs(diff)); % escalar
+% successStep = all(abs(diff) < 0.03);
+% 
+% % ---- Guardar métricas en el entorno (para logs en step.m)
+% this.meanDistStep = meanAbsDist;
+% this.mseStep      = mse;
+% this.successStep  = successStep;
+% 
+% % ---- (4) Parámetros (v1.1 recomendados)
+% k_d   = 8.0;     % ↑ más presión por tracking (prueba 5..12)
+% gamma = 0.99;    % PBRS
+% k_s   = 10.0;    % shaping PBRS (mantener para estabilidad)
+% 
+% % Bonus suave de precisión (empuja refinamiento)
+% k_prec = 1.5;    % prueba 1..3
+% alpha  = 60;     % sensibilidad (30..120). Mayor => bonus solo cuando mse es pequeño
+% 
+% % Clipping suave
+% L = 12;          % 10..20 (sube si sientes mucha saturación)
+% 
+% % ---- (5) Término base (tracking fuerte)
+% baseTerm = -k_d * mse;
+% 
+% % ---- (6) Potencial y PBRS
+% phi = -log(1 + mse);                 % Phi(s')
+% shapingTerm = k_s * (gamma*phi - prevPhi);
+% prevPhi = phi;
+% 
+% % ---- (7) Bonus suave de precisión
+% precisionBonus = k_prec * exp(-alpha * mse);
+% 
+% % ---- (8) Reward total + clipping
+% rewardRaw = baseTerm + shapingTerm + precisionBonus;
+% reward = L * tanh(rewardRaw / L);
+% 
+% % ---- (9) rewardVector (por motor) para compatibilidad/diagnóstico
+% rewardVector = -k_d * (diff.^2);
+% 
+% % ---- Debug opcional
+% % if this.c == 1
+% %     fprintf("---- NEW EP (v1.1 PBRS+precision) ----\n");
+% % end
+% % if mod(this.c,10)==0
+% %     fprintf("c=%d base=%.6f shape=%.6f prec=%.6f raw=%.6f final=%.6f | mse=%.6f | meanAbs=%.4f | succ=%d\n", ...
+% %         this.c, baseTerm, shapingTerm, precisionBonus, rewardRaw, reward, mse, meanAbsDist, successStep);
+% % end
+% 
+% end
+% % %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
+
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% %%%%%%%%%%% %%      VERSION 2   tipo delta-error dominante + clipping%%%%%%%%%%%%%
+% % %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
+
+%function [reward, rewardVector, action] = reward_v2_progress_dominant(this, action, ~)
+% ==========================================================
+% Reward v2: Progress-Dominant (Tracking + Delta-Error + Clipping)
+% ----------------------------------------------------------
+% r = -k_d*mse + k_p*(mse_prev - mse) - k_bad*max(0, mse - mse_prev)
+% reward = L * tanh(r_raw / L)
+%
+% Objetivo: forzar mejora step-a-step (progreso explícito).
+% ==========================================================
+
+persistent prevMSE
+
+% ---- RESET por episodio
+if this.c == 1
+    prevMSE = NaN; % evita castigo artificial al primer step
+end
+
+% ---- (1) Referencia (q_ref) del dataset en este step
 if this.c == 1
     flexConv = this.flexJoined_scaler(reduceFlexDimension(this.flexData));
 else
     flexConv = this.flexConvertedLog{this.c - 1};
 end
+q_ref = flexConv(end, :);  % 1x4
 
-% ---- (2) Obtener estado actual de motores y convertir a flex normalizada: posFlex
+% ---- (2) Estado actual (q) desde encoders
 pos = this.motorData(end, :);
-posFlex = this.flexJoined_scaler(encoder2Flex(pos));
+q   = this.flexJoined_scaler(encoder2Flex(pos));  % 1x4
 
-% ---- (3) Error por motor (tracking): diff = posFlex - target
-diff = posFlex - flexConv(end, :);      % 1x4
+% ---- (3) Error y métricas
+diff = q - q_ref;              % 1x4
+mse  = mean(diff.^2);          % escalar
+meanAbsDist = mean(abs(diff)); % escalar
+successStep = all(abs(diff) < 0.03);
 
-% ---- (4) Métrica escalar del error (baseline): MSE (mean squared error)
-mse = mean(diff.^2);                    % escalar
-%%%%%%%%%%%%%%%%%%%------------------------------------------%%%%%%%%%%%%%%
-%--------------------------------------------------------------------------
-meanAbsDist = mean(abs(diff));  % más interpretable que mse
-%--------------------------------------------------------------------------
-%%%%%%%%%%%%%%%%%%%------------------------------------------%%%%%%%%%%%%%%
-
-% ---- (5) Reward base: negativo del error (minimizar mse)
-k_d = 1.0;                              % escala inicial (igual que opts.k en v5)
-rewardRaw = -k_d * mse;                 % escalar
-
-% ---- (6) Sin clipping en v0 (para ver comportamiento real del error)
-reward = rewardRaw;
-
-% ---- (7) rewardVector (para compatibilidad): descomposición por motor
-% Aquí lo hacemos como contribución negativa por motor (opcional, pero útil)
-rewardVector = -k_d * (diff.^2);        % 1x4
-
-% ---- (8) DEBUG (opcional)
-if this.c == 1
-    fprintf("---- NEW EP (v0) ----\n");
-end
-if mod(this.c,10)==0
-    distanceAbs = abs(diff);
-    meanAbsDist = mean(distanceAbs);
-    fprintf("c=%d reward=%.6f mse=%.6f | meanAbsDist=%.4f | minAbsDist=%.4f\n", ...
-        this.c, reward, mse, meanAbsDist, min(distanceAbs));
-end
-
-% Guardar métricas en el entorno
+% ---- Guardar métricas en el entorno (para logs en step.m)
 this.meanDistStep = meanAbsDist;
-this.mseStep = mse;
-this.successStep = all(abs(diff) < 0.03);
+this.mseStep      = mse;
+this.successStep  = successStep;
 
+% ---- (4) Parámetros (iniciales recomendados)
+k_d   = 1.0;      % tracking base (suave)
+k_p   = 250.0;    % progreso dominante (prueba 150..400)
+k_bad = 120.0;    % castigo si empeora (prueba 60..200)
+
+L = 12;           % clipping suave (10..20)
+
+% ---- (5) Términos de reward
+baseTerm = -k_d * mse;
+
+if isnan(prevMSE)
+    delta = 0;
+else
+    delta = (prevMSE - mse);   % positivo si mejora
 end
 
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
- 
- 
- 
- 
+progressTerm = k_p * delta;
+
+% Penaliza cuando empeora
+if isnan(prevMSE)
+    worsen = 0;
+else
+    worsen = max(0, mse - prevMSE);
+end
+badTerm = -k_bad * worsen;
+
+% Actualizar memoria
+prevMSE = mse;
+
+% ---- (6) Reward total + clipping
+rewardRaw = baseTerm + progressTerm + badTerm;
+reward = L * tanh(rewardRaw / L);
+
+% ---- (7) rewardVector (por motor) para compatibilidad/diagnóstico
+% (solo componente base por articulación)
+rewardVector = -k_d * (diff.^2);
+
+% ---- Debug opcional
+% if this.c == 1
+%     fprintf("---- NEW EP (v2 Progress Dominant) ----\n");
+% end
+% if mod(this.c,10)==0
+%     fprintf("c=%d base=%.6f prog=%.6f bad=%.6f raw=%.6f final=%.6f | mse=%.6f | meanAbs=%.4f\n", ...
+%         this.c, baseTerm, progressTerm, badTerm, rewardRaw, reward, mse, meanAbsDist);
+% end
+
+end
+% % %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
+
+
 % 
 % persistent previousPosFlex inactiveSteps
 % 
