@@ -126,7 +126,61 @@ function [observation, reward, isDone, loggedSignals] = step(this, action)
     %% Update aux vars used for logging/plotting
     this.flexConverted = this.flexJoined_scaler(reduceFlexDimension(this.flexData));
     this.adjustEnc = this.flexJoined_scaler(encoder2Flex(this.motorData));
+    %%%%%%%%%%%%%%%%%%%%%%%%----------------------%%%%%%%%%%%%%%%%%%%%%%%%%
+                    %   SENSIBILIDAD q(t+1) - q   %
+    %%%%%%%%%%%%%%%%%%%%%%%%----------------------%%%%%%%%%%%%%%%%%%%%%%%%%
 
+    % =========================
+    % Sensitivity instrumentation
+    % =========================
+    % 1) Acción discreta (antes de speeds)
+    % OJO: aquí usamos la acción ya guardada en actionSatLog (la que ejecutaste)
+    % Acción antes de speeds (discreta/real)
+    a_raw = this.actionSatLog(this.c, :);   % o this.actionLog(this.c,:) si prefieres
+    this.aRawLog(this.c, :) = a_raw;
+    
+    % Acción aplicada (después de speeds)
+    a_applied = a_raw .* this.speeds;
+    this.aAppliedLog(this.c, :) = a_applied;
+    
+    % Estado actual q (encoder->flex)
+    q = this.adjustEnc(end, :);            % 1x4
+    this.qLog(this.c, :) = q;
+    
+    % Referencia q_ref
+    q_ref = this.flexConverted(end, :);    % 1x4 (target)
+    this.qRefLog(this.c, :) = q_ref;
+    
+    % Error y norma
+    e = q - q_ref;
+    this.errNormLog(this.c) = norm(e);
+    
+    % Delta q
+    if this.c == 1
+        dq = [0 0 0 0];
+    else
+        dq = this.qLog(this.c, :) - this.qLog(this.c-1, :);
+    end
+    this.dqLog(this.c, :) = dq;
+    this.effectNormLog(this.c) = norm(dq);
+    
+    % ¿Acción en dirección correcta?
+    % dirección correcta: si q < q_ref => deberíamos aumentar (acción +)
+    % si q > q_ref => deberíamos disminuir (acción -)
+    dirAgree = zeros(1,4);
+    for i=1:4
+        if q(i) < q_ref(i)
+            correct = 1;
+        elseif q(i) > q_ref(i)
+            correct = -1;
+        else
+            correct = 0;
+        end
+        dirAgree(i) = (a_raw(i) == correct);
+    end
+    this.dirAgreeLog(this.c, :) = dirAgree;
+    %%%%%%%%%%%%%%%%%%%%%%%%----------------------%%%%%%%%%%%%%%%%%%%%%%%%%
+    %%%%%%%%%%%%%%%%%%%%%%%%----------------------%%%%%%%%%%%%%%%%%%%%%%%%%
     %% logs
     this.emgLog{this.c} = emg;
     this.encoderAdjustedLog{this.c} = this.adjustEnc;

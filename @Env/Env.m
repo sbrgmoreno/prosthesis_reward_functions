@@ -147,6 +147,22 @@ classdef Env < rl.env.MATLABEnvironment
         %%%%%%%%%%%%%%%%%%%%%%%%----------------------%%%%%%%%%%%%%%%%%%%%%%%%%
         %%%%%%%%%%%%%%%%%%%%%%%%----------------------%%%%%%%%%%%%%%%%%%%%%%%%%
 
+        %%%%%%%%%%%%%%%%%%%%%%%%----------------------%%%%%%%%%%%%%%%%%%%%%%%%%
+                         %      METRICAS DE SENSIBILIDAD     %
+        %%%%%%%%%%%%%%%%%%%%%%%%----------------------%%%%%%%%%%%%%%%%%%%%%%%%%
+        % ---- Sensitivity logs (per-step)
+        qLog = [];           % [maxSteps x 4] estado q (encoder->flex)
+        qRefLog = [];        % [maxSteps x 4] referencia q_ref
+        dqLog = [];          % [maxSteps x 4] delta q = q(t)-q(t-1)
+        aRawLog = [];        % [maxSteps x 4] acción discreta antes de speeds
+        aAppliedLog = [];    % [maxSteps x 4] acción aplicada (después de speeds)
+        dirAgreeLog = [];    % [maxSteps x 4] bool: acción en dirección correcta
+        effectNormLog = [];  % [maxSteps x 1] norm(dq)
+        errNormLog = [];     % [maxSteps x 1] norm(q-q_ref)
+        dErrLog = [];
+        %%%%%%%%%%%%%%%%%%%%%%%%----------------------%%%%%%%%%%%%%%%%%%%%%%%%%
+        %%%%%%%%%%%%%%%%%%%%%%%%----------------------%%%%%%%%%%%%%%%%%%%%%%%%%
+
         wait_in_step = false; % bool to wait period
     end
 

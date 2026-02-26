@@ -316,98 +316,98 @@ function [reward, rewardVector, action] = legacy_distanceRewarding(this, action)
 % end
 % % %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
 
-% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% %%%%%%%%%%% %%      VERSION 2   tipo delta-error dominante + clipping%%%%%%%%%%%%%
-% % %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
-
-%function [reward, rewardVector, action] = reward_v2_progress_dominant(this, action, ~)
-% ==========================================================
-% Reward v2: Progress-Dominant (Tracking + Delta-Error + Clipping)
-% ----------------------------------------------------------
-% r = -k_d*mse + k_p*(mse_prev - mse) - k_bad*max(0, mse - mse_prev)
-% reward = L * tanh(r_raw / L)
-%
-% Objetivo: forzar mejora step-a-step (progreso explícito).
-% ==========================================================
-
-persistent prevMSE
-
-% ---- RESET por episodio
-if this.c == 1
-    prevMSE = NaN; % evita castigo artificial al primer step
-end
-
-% ---- (1) Referencia (q_ref) del dataset en este step
-if this.c == 1
-    flexConv = this.flexJoined_scaler(reduceFlexDimension(this.flexData));
-else
-    flexConv = this.flexConvertedLog{this.c - 1};
-end
-q_ref = flexConv(end, :);  % 1x4
-
-% ---- (2) Estado actual (q) desde encoders
-pos = this.motorData(end, :);
-q   = this.flexJoined_scaler(encoder2Flex(pos));  % 1x4
-
-% ---- (3) Error y métricas
-diff = q - q_ref;              % 1x4
-mse  = mean(diff.^2);          % escalar
-meanAbsDist = mean(abs(diff)); % escalar
-successStep = all(abs(diff) < 0.03);
-
-% ---- Guardar métricas en el entorno (para logs en step.m)
-this.meanDistStep = meanAbsDist;
-this.mseStep      = mse;
-this.successStep  = successStep;
-
-% ---- (4) Parámetros (iniciales recomendados)
-k_d   = 1.0;      % tracking base (suave)
-k_p   = 250.0;    % progreso dominante (prueba 150..400)
-k_bad = 120.0;    % castigo si empeora (prueba 60..200)
-
-L = 12;           % clipping suave (10..20)
-
-% ---- (5) Términos de reward
-baseTerm = -k_d * mse;
-
-if isnan(prevMSE)
-    delta = 0;
-else
-    delta = (prevMSE - mse);   % positivo si mejora
-end
-
-progressTerm = k_p * delta;
-
-% Penaliza cuando empeora
-if isnan(prevMSE)
-    worsen = 0;
-else
-    worsen = max(0, mse - prevMSE);
-end
-badTerm = -k_bad * worsen;
-
-% Actualizar memoria
-prevMSE = mse;
-
-% ---- (6) Reward total + clipping
-rewardRaw = baseTerm + progressTerm + badTerm;
-reward = L * tanh(rewardRaw / L);
-
-% ---- (7) rewardVector (por motor) para compatibilidad/diagnóstico
-% (solo componente base por articulación)
-rewardVector = -k_d * (diff.^2);
-
-% ---- Debug opcional
+% % %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% % %%%%%%%%%%% %%      VERSION 2   tipo delta-error dominante + clipping%%%%%%%%%%%%%
+% % % %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
+% 
+% %function [reward, rewardVector, action] = reward_v2_progress_dominant(this, action, ~)
+% % ==========================================================
+% % Reward v2: Progress-Dominant (Tracking + Delta-Error + Clipping)
+% % ----------------------------------------------------------
+% % r = -k_d*mse + k_p*(mse_prev - mse) - k_bad*max(0, mse - mse_prev)
+% % reward = L * tanh(r_raw / L)
+% %
+% % Objetivo: forzar mejora step-a-step (progreso explícito).
+% % ==========================================================
+% 
+% persistent prevMSE
+% 
+% % ---- RESET por episodio
 % if this.c == 1
-%     fprintf("---- NEW EP (v2 Progress Dominant) ----\n");
+%     prevMSE = NaN; % evita castigo artificial al primer step
 % end
-% if mod(this.c,10)==0
-%     fprintf("c=%d base=%.6f prog=%.6f bad=%.6f raw=%.6f final=%.6f | mse=%.6f | meanAbs=%.4f\n", ...
-%         this.c, baseTerm, progressTerm, badTerm, rewardRaw, reward, mse, meanAbsDist);
+% 
+% % ---- (1) Referencia (q_ref) del dataset en este step
+% if this.c == 1
+%     flexConv = this.flexJoined_scaler(reduceFlexDimension(this.flexData));
+% else
+%     flexConv = this.flexConvertedLog{this.c - 1};
 % end
-
-end
-% % %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
+% q_ref = flexConv(end, :);  % 1x4
+% 
+% % ---- (2) Estado actual (q) desde encoders
+% pos = this.motorData(end, :);
+% q   = this.flexJoined_scaler(encoder2Flex(pos));  % 1x4
+% 
+% % ---- (3) Error y métricas
+% diff = q - q_ref;              % 1x4
+% mse  = mean(diff.^2);          % escalar
+% meanAbsDist = mean(abs(diff)); % escalar
+% successStep = all(abs(diff) < 0.03);
+% 
+% % ---- Guardar métricas en el entorno (para logs en step.m)
+% this.meanDistStep = meanAbsDist;
+% this.mseStep      = mse;
+% this.successStep  = successStep;
+% 
+% % ---- (4) Parámetros (iniciales recomendados)
+% k_d   = 1.0;      % tracking base (suave)
+% k_p   = 250.0;    % progreso dominante (prueba 150..400)
+% k_bad = 120.0;    % castigo si empeora (prueba 60..200)
+% 
+% L = 12;           % clipping suave (10..20)
+% 
+% % ---- (5) Términos de reward
+% baseTerm = -k_d * mse;
+% 
+% if isnan(prevMSE)
+%     delta = 0;
+% else
+%     delta = (prevMSE - mse);   % positivo si mejora
+% end
+% 
+% progressTerm = k_p * delta;
+% 
+% % Penaliza cuando empeora
+% if isnan(prevMSE)
+%     worsen = 0;
+% else
+%     worsen = max(0, mse - prevMSE);
+% end
+% badTerm = -k_bad * worsen;
+% 
+% % Actualizar memoria
+% prevMSE = mse;
+% 
+% % ---- (6) Reward total + clipping
+% rewardRaw = baseTerm + progressTerm + badTerm;
+% reward = L * tanh(rewardRaw / L);
+% 
+% % ---- (7) rewardVector (por motor) para compatibilidad/diagnóstico
+% % (solo componente base por articulación)
+% rewardVector = -k_d * (diff.^2);
+% 
+% % ---- Debug opcional
+% % if this.c == 1
+% %     fprintf("---- NEW EP (v2 Progress Dominant) ----\n");
+% % end
+% % if mod(this.c,10)==0
+% %     fprintf("c=%d base=%.6f prog=%.6f bad=%.6f raw=%.6f final=%.6f | mse=%.6f | meanAbs=%.4f\n", ...
+% %         this.c, baseTerm, progressTerm, badTerm, rewardRaw, reward, mse, meanAbsDist);
+% % end
+% 
+% end
+% % % %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
 
 
 % 
@@ -1535,6 +1535,430 @@ end
 % % ===============================================
 % 
 % end
+
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% %%%%% VERSION 7 v5 + v6 (PBRS + clipping + Huber loss)  %%%%%%%%%%%%%%%%%%
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% 
+% %function [reward, rewardVector, action] = legacy_distanceRewarding_v7(this, action, ~)
+% % ===========================
+% % Reward v7: Hybrid v5 (signal) + v6 (low variance via Huber)
+% % ===========================
+% 
+% persistent previousPosFlex inactiveSteps previousPhi stepCount
+% persistent prevErrHuber
+% 
+% % Init (first time)
+% if isempty(prevErrHuber), prevErrHuber = 0; end
+% if isempty(previousPosFlex), previousPosFlex = zeros(size(action)); end
+% if isempty(inactiveSteps), inactiveSteps = 0; end
+% if isempty(previousPhi), previousPhi = 0; end
+% if isempty(stepCount), stepCount = 0; end
+% 
+% % ---- RESET por episodio
+% if this.c == 1
+%     previousPosFlex = zeros(size(action));
+%     inactiveSteps = 0;
+%     previousPhi = 0;
+%     stepCount = 0;
+%     prevErrHuber = NaN;  % para no castigar primer step
+% end
+% 
+% stepCount = stepCount + 1;
+% 
+% % ---------------------------
+% % Parámetros (ajustables)
+% % ---------------------------
+% opts.gamma = 0.99;
+% 
+% % Señales principales
+% kDist   = 1.0;     % penalización por distancia (suave)
+% kProg   = 40;      % ganancia de progreso (v5)
+% kShape  = 12;      % ganancia PBRS (más suave que v5 base=20)
+% clipLimit = 20;    % clipping tanh
+% 
+% % Huber
+% deltaHuber = 0.05; % umbral Huber (en espacio [0,1]) -> 0.03..0.08 típico
+% 
+% % Bonuses
+% thrPrec = 0.03;
+% thrStd  = 0.01;
+% precisionBonus = 3;
+% stabilityBonus = 2;
+% successBonus   = 50;
+% 
+% % Reward por motor (v5 base)
+% rewards = struct( ...
+%     'dirInverse', -3, ...
+%     'wrongStop', -6, ...
+%     'goodMove', 15, ...
+%     'goodMove2', 2, ...
+%     'inactivityPenalty', -2, ...
+%     'moveIncentive', 4, ...
+%     'smoothnessPenalty', -2, ...
+%     'efficiencyBonus', 3 ...
+% );
+% 
+% rewardVector = zeros(1, length(action));
+% 
+% % ---------------------------
+% % Estado actual (referencia y prótesis)
+% % ---------------------------
+% if this.c == 1
+%     flexConv = this.flexJoined_scaler(reduceFlexDimension(this.flexData));
+% else
+%     flexConv = this.flexConvertedLog{this.c - 1};
+% end
+% 
+% pos = this.motorData(end, :);
+% posFlex = this.flexJoined_scaler(encoder2Flex(pos));
+% 
+% % ---------------------------
+% % Recompensas por motor (dirección + suavidad + eficiencia)
+% % ---------------------------
+% for i = 1:length(action)
+%     if posFlex(i) < flexConv(end, i)
+%         correctAction = 1;
+%     elseif posFlex(i) > flexConv(end, i)
+%         correctAction = -1;
+%     else
+%         correctAction = 0;
+%     end
+% 
+%     if action(i) == correctAction
+%         rewardVector(i) = rewards.goodMove * (action(i) ~= 0) + rewards.goodMove2 * (action(i) == 0);
+%     elseif action(i) == 0
+%         rewardVector(i) = rewards.wrongStop;
+%     else
+%         rewardVector(i) = rewards.dirInverse;
+%     end
+% 
+%     slope = posFlex(i) - previousPosFlex(i);
+%     rewardVector(i) = rewardVector(i) + rewards.smoothnessPenalty * sqrt(abs(slope));
+% 
+%     if abs(slope) > 0.01 && abs(slope) < 0.4
+%         rewardVector(i) = rewardVector(i) + rewards.efficiencyBonus;
+%     end
+% end
+% previousPosFlex = posFlex;
+% 
+% % ---------------------------
+% % Inactividad (v5)
+% % ---------------------------
+% distance = abs(posFlex - flexConv(end, :));
+% 
+% if all(action == 0) && any(distance > 0.05)
+%     inactiveSteps = inactiveSteps + 1;
+%     penalty = rewards.inactivityPenalty * inactiveSteps;
+%     rewardVector = rewardVector + penalty;
+% else
+%     inactiveSteps = 0;
+% end
+% 
+% if any(action ~= 0)
+%     rewardVector = rewardVector + rewards.moveIncentive;
+% end
+% 
+% % ---------------------------
+% % Error robusto (Huber) (v6 style)
+% % ---------------------------
+% diff = (posFlex - flexConv(end, :));  % [-1,1]
+% absDiff = abs(diff);
+% 
+% huberPerMotor = zeros(1,4);
+% for i=1:4
+%     if absDiff(i) <= deltaHuber
+%         huberPerMotor(i) = 0.5 * (diff(i)^2);
+%     else
+%         huberPerMotor(i) = deltaHuber * (absDiff(i) - 0.5*deltaHuber);
+%     end
+% end
+% errHuber = mean(huberPerMotor);  % escalar robusto
+% 
+% % Guardar métricas (para tus logs del env)
+% this.meanDistStep = mean(distance);     % útil para comparar con lo anterior
+% this.mseStep      = mean(diff.^2);
+% this.successStep  = all(distance < thrPrec);
+% 
+% % ---------------------------
+% % Penalización base por distancia (suave)
+% % ---------------------------
+% rewardVector = rewardVector - kDist * sqrt(distance);
+% 
+% % ---------------------------
+% % Bonuses (v5)
+% % ---------------------------
+% precisionMask = distance < thrPrec;
+% rewardVector(precisionMask) = rewardVector(precisionMask) + precisionBonus;
+% 
+% if std(distance) < thrStd
+%     rewardVector = rewardVector + stabilityBonus;
+% end
+% 
+% baseReward = sum(rewardVector);
+% 
+% if all(distance < thrPrec)
+%     baseReward = baseReward + successBonus;
+% end
+% 
+% % ---------------------------
+% % Progreso (v5) pero con errHuber (v6)
+% % ---------------------------
+% if isnan(prevErrHuber)
+%     progressTerm = 0;
+% else
+%     progressTerm = kProg * (prevErrHuber - errHuber);
+% end
+% prevErrHuber = errHuber;
+% 
+% % Clamp del progreso para bajar varianza
+% progressTerm = max(min(progressTerm, 5), -5);
+% 
+% % ---------------------------
+% % PBRS (v5) con potencial robusto
+% % ---------------------------
+% phiCurrent = -log(1 + errHuber);
+% 
+% % Decaimiento suave de shaping (opcional)
+% shapingGain = kShape * exp(-0.0002 * stepCount);
+% 
+% shapingTerm = shapingGain * (opts.gamma * phiCurrent - previousPhi);
+% previousPhi = phiCurrent;
+% 
+% % ---------------------------
+% % Reward final + clipping (v5)
+% % ---------------------------
+% rewardRaw = baseReward + progressTerm + shapingTerm;
+% reward = clipLimit * tanh(rewardRaw / clipLimit);
+% 
+% % Debug cada 10 steps
+% if mod(this.c,10)==0
+%     fprintf("c=%d base=%.3f prog=%.3f shape=%.3f raw=%.3f final=%.3f | errHuber=%.4f | meanDist=%.4f\n", ...
+%         this.c, baseReward, progressTerm, shapingTerm, rewardRaw, reward, errHuber, mean(distance));
+% end
+% 
+% end
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%VERSION 8 (PBRS con Huber loss + clipping mas grande + se baja el base reward y se aumenta el progressTerm)  %%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%function [reward, rewardVector, action] = legacy_distanceRewarding_v8(this, action, ~)
+% ===========================
+% Reward v8: Tracking-dominant (Progress + PBRS) + Low-variance (Huber)
+% ===========================
+
+persistent previousPosFlex inactiveSteps previousPhi stepCount
+persistent prevErrHuber
+
+% Init (first time)
+if isempty(prevErrHuber), prevErrHuber = 0; end
+if isempty(previousPosFlex), previousPosFlex = zeros(size(action)); end
+if isempty(inactiveSteps), inactiveSteps = 0; end
+if isempty(previousPhi), previousPhi = 0; end
+if isempty(stepCount), stepCount = 0; end
+
+% ---- RESET por episodio
+if this.c == 1
+    previousPosFlex = zeros(size(action));
+    inactiveSteps = 0;
+    previousPhi = 0;
+    stepCount = 0;
+    prevErrHuber = NaN;  % no castigar primer step
+end
+
+stepCount = stepCount + 1;
+
+% ---------------------------
+% Parámetros (v8)
+% ---------------------------
+gamma = 0.99;
+
+% Pesos globales (CLAVE)
+wBase = 0.25;      % << reduce dominio del baseReward (0.2..0.35)
+kProg = 120;       % << progreso manda (80..160)
+kShape = 30;       % << PBRS más fuerte (20..40)
+clipLimit = 25;    % clipping un poco más alto
+
+% Huber (robusto)
+deltaHuber = 0.05;
+
+% Penalización distancia base
+kDist = 0.7;       % reduce presión por distancia directa (0.5..1.0)
+
+% Bonus/umbrales
+thrPrec = 0.03;
+thrStd  = 0.01;
+precisionBonus = 2;     % baja un poco para no dominar
+stabilityBonus = 1.5;
+successBonus   = 40;
+
+% Anti-cheating cuando empeora
+badProgressPenalty = 3;  % penaliza si dErr<0 (2..6)
+
+% Reward por motor (menos agresivo que v5)
+rewards = struct( ...
+    'dirInverse', -2, ...
+    'wrongStop', -4, ...
+    'goodMove', 8, ...
+    'goodMove2', 1, ...
+    'inactivityPenalty', -1.5, ...
+    'moveIncentive', 2, ...
+    'smoothnessPenalty', -1.5, ...
+    'efficiencyBonus', 2 ...
+);
+
+rewardVector = zeros(1, length(action));
+
+% ---------------------------
+% Estado actual (referencia y prótesis)
+% ---------------------------
+if this.c == 1
+    flexConv = this.flexJoined_scaler(reduceFlexDimension(this.flexData));
+else
+    flexConv = this.flexConvertedLog{this.c - 1};
+end
+
+pos = this.motorData(end, :);
+posFlex = this.flexJoined_scaler(encoder2Flex(pos));
+
+distance = abs(posFlex - flexConv(end, :));
+diff = (posFlex - flexConv(end, :));
+
+% ---------------------------
+% Recompensas por motor (dirección + suavidad + eficiencia)
+% ---------------------------
+for i = 1:length(action)
+    if posFlex(i) < flexConv(end, i)
+        correctAction = 1;
+    elseif posFlex(i) > flexConv(end, i)
+        correctAction = -1;
+    else
+        correctAction = 0;
+    end
+
+    if action(i) == correctAction
+        rewardVector(i) = rewards.goodMove * (action(i) ~= 0) + rewards.goodMove2 * (action(i) == 0);
+    elseif action(i) == 0
+        rewardVector(i) = rewards.wrongStop;
+    else
+        rewardVector(i) = rewards.dirInverse;
+    end
+
+    slope = posFlex(i) - previousPosFlex(i);
+    rewardVector(i) = rewardVector(i) + rewards.smoothnessPenalty * sqrt(abs(slope));
+
+    if abs(slope) > 0.01 && abs(slope) < 0.4
+        rewardVector(i) = rewardVector(i) + rewards.efficiencyBonus;
+    end
+end
+previousPosFlex = posFlex;
+
+% ---------------------------
+% Inactividad (suave)
+% ---------------------------
+if all(action == 0) && any(distance > 0.05)
+    inactiveSteps = inactiveSteps + 1;
+    rewardVector = rewardVector + rewards.inactivityPenalty * inactiveSteps;
+else
+    inactiveSteps = 0;
+end
+
+if any(action ~= 0)
+    rewardVector = rewardVector + rewards.moveIncentive;
+end
+
+% ---------------------------
+% Error robusto Huber (tracking core)
+% ---------------------------
+absDiff = abs(diff);
+huberPerMotor = zeros(1,4);
+for i=1:4
+    if absDiff(i) <= deltaHuber
+        huberPerMotor(i) = 0.5 * (diff(i)^2);
+    else
+        huberPerMotor(i) = deltaHuber * (absDiff(i) - 0.5*deltaHuber);
+    end
+end
+errHuber = mean(huberPerMotor);
+
+% Guardar métricas del env (si ya tienes esas properties públicas)
+this.meanDistStep = mean(distance);
+this.mseStep      = mean(diff.^2);
+this.successStep  = all(distance < thrPrec);
+
+% ---------------------------
+% Penalización por distancia (suave)
+% ---------------------------
+rewardVector = rewardVector - kDist * sqrt(distance);
+
+% ---------------------------
+% Bonuses (pequeños)
+% ---------------------------
+precisionMask = distance < thrPrec;
+rewardVector(precisionMask) = rewardVector(precisionMask) + precisionBonus;
+
+if std(distance) < thrStd
+    rewardVector = rewardVector + stabilityBonus;
+end
+
+baseReward = sum(rewardVector);
+
+if all(distance < thrPrec)
+    baseReward = baseReward + successBonus;
+end
+
+% <<<<<< CLAVE: baseReward reducido
+baseReward = wBase * baseReward;
+
+% ---------------------------
+% Progreso (manda)
+% ---------------------------
+if isnan(prevErrHuber)
+    dErr = 0;
+    progressTerm = 0;
+else
+    dErr = (prevErrHuber - errHuber);   % positivo=mejora
+    progressTerm = kProg * dErr;
+end
+prevErrHuber = errHuber;
+
+% clamp más grande (para que sí pese)
+progressTerm = max(min(progressTerm, 10), -10);
+
+% penaliza explícitamente cuando empeora
+if dErr < 0
+    progressTerm = progressTerm - badProgressPenalty;
+end
+
+% ---------------------------
+% PBRS (fuerte)
+% ---------------------------
+phiCurrent = -log(1 + errHuber);
+
+% decaimiento suave para no dominar al final
+shapingGain = kShape * exp(-0.00015 * stepCount);
+
+shapingTerm = shapingGain * (gamma * phiCurrent - previousPhi);
+previousPhi = phiCurrent;
+
+% ---------------------------
+% Reward final + clipping
+% ---------------------------
+rewardRaw = baseReward + progressTerm + shapingTerm;
+reward = clipLimit * tanh(rewardRaw / clipLimit);
+
+% Debug cada 10 steps
+if mod(this.c,10)==0
+    fprintf("c=%d base=%.2f prog=%.2f shape=%.2f raw=%.2f final=%.2f | errH=%.4f dErr=%.4f meanDist=%.4f\n", ...
+        this.c, baseReward, progressTerm, shapingTerm, rewardRaw, reward, errHuber, dErr, mean(distance));
+end
+
+end
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
 
 
 

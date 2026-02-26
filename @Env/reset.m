@@ -30,9 +30,24 @@ this.mseLog      = nan(this.maxNumberStepsInEpisodes, 1);
 this.successLog  = nan(this.maxNumberStepsInEpisodes, 1);
 %%%%%%%%%%%%%%%%%%%%%%%%----------------------%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%----------------------%%%%%%%%%%%%%%%%%%%%%%%%%
+
 this.rewardIndividualLog = cell(this.maxNumberStepsInEpisodes, 4);
 this.emgLog = cell(this.maxNumberStepsInEpisodes, 1);
 this.flexConvertedLog = cell(this.maxNumberStepsInEpisodes, 1);
+%%%%%%%%%%%%%%%%%%%%%%%%----------------------%%%%%%%%%%%%%%%%%%%%%%%%%
+                       % LOGS DE SENSIBILIDAD %7
+                       %logs limpios cada step%
+%%%%%%%%%%%%%%%%%%%%%%%%----------------------%%%%%%%%%%%%%%%%%%%%%%%%%
+this.qLog          = nan(this.maxNumberStepsInEpisodes, 4);
+this.qRefLog       = nan(this.maxNumberStepsInEpisodes, 4);
+this.dqLog         = nan(this.maxNumberStepsInEpisodes, 4);
+this.aRawLog       = nan(this.maxNumberStepsInEpisodes, 4);
+this.aAppliedLog   = nan(this.maxNumberStepsInEpisodes, 4);
+this.dirAgreeLog   = nan(this.maxNumberStepsInEpisodes, 4);
+this.effectNormLog = nan(this.maxNumberStepsInEpisodes, 1);
+this.errNormLog    = nan(this.maxNumberStepsInEpisodes, 1);
+%%%%%%%%%%%%%%%%%%%%%%%%----------------------%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%----------------------%%%%%%%%%%%%%%%%%%%%%%%%%
 
 if this.returnHomeAtEndEpisode
     drawnow
