@@ -21,35 +21,64 @@ Ahora solo lo sabe dios.
 7 / 2 / 2021
 Matlab r2021b.
 %}
-numHiddenUnits = 64;
-name = 'dqn0';
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% numHiddenUnits = 64;
+% name = 'dqn0';
+% 
+% %% configs
+% initOpts = rlAgentInitializationOptions('NumHiddenUnit', numHiddenUnits,...
+%     'UseRNN',false);
+% 
+% %Para Deep Q Learning
+% agentOptions = rlDQNAgentOptions(...
+%     'UseDoubleDQN', true, ... % default
+%     'SequenceLength', 1, ... % default, Maximum batch-training trajectory length when using a recurrent neural network for the critic, specified as a positive integer. This value must be greater than 1 when using a recurrent neural network for the critic and 1 otherwise.
+%     'TargetSmoothFactor',1e-3, ... % Smoothing factor for target critic updates, specified as a positive scalar less than or equal to 1.
+%     'TargetUpdateFrequency', 1, ... %def
+%     'ResetExperienceBufferBeforeTraining', true,...%default
+%     'SaveExperienceBufferWithAgent', true, ... % not default
+%     'MiniBatchSize', 64, ... & default
+%     'NumStepsToLookAhead', 10, ...
+%     'ExperienceBufferLength', 10000, ... % default
+%     'DiscountFactor', 0.99 );% default
+% 
+% 
+%  agentOptions.EpsilonGreedyExploration.EpsilonDecay = 1e-4;
+%  agentOptions.EpsilonGreedyExploration.Epsilon = 1; % default
+%  agentOptions.EpsilonGreedyExploration.EpsilonMin = 0.01; % default
+% 
+% agent = rlDQNAgent(observationInfo,actionInfo, initOpts, agentOptions);
+% 
+% critic = agent.getCritic;
+% critic.Options.LearnRate = 0.01; % default
+% agent = agent.setCritic(critic);
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+numHiddenUnits = 128;   % subimos capacidad
+name = 'dqn_stable';
 
-%% configs
-initOpts = rlAgentInitializationOptions('NumHiddenUnit', numHiddenUnits,...
-    'UseRNN',false);
+initOpts = rlAgentInitializationOptions( ...
+    'NumHiddenUnit', numHiddenUnits, ...
+    'UseRNN', false);
 
-%Para Deep Q Learning
-agentOptions = rlDQNAgentOptions(...
-    'UseDoubleDQN', true, ... % default
-    'SequenceLength', 1, ... % default, Maximum batch-training trajectory length when using a recurrent neural network for the critic, specified as a positive integer. This value must be greater than 1 when using a recurrent neural network for the critic and 1 otherwise.
-    'TargetSmoothFactor',1e-3, ... % Smoothing factor for target critic updates, specified as a positive scalar less than or equal to 1.
-    'TargetUpdateFrequency', 1, ... %def
-    'ResetExperienceBufferBeforeTraining', true,...%default
-    'SaveExperienceBufferWithAgent', true, ... % not default
-    'MiniBatchSize', 64, ... & default
-    'NumStepsToLookAhead', 10, ...
-    'ExperienceBufferLength', 10000, ... % default
-    'DiscountFactor', 0.99 );% default
+agentOptions = rlDQNAgentOptions( ...
+    'UseDoubleDQN', true, ...
+    'SequenceLength', 1, ...
+    'TargetSmoothFactor', 5e-3, ...        % más suave (antes 1e-3)
+    'TargetUpdateFrequency', 200, ...      % CLAVE (antes 1)
+    'ResetExperienceBufferBeforeTraining', true, ...
+    'SaveExperienceBufferWithAgent', true, ...
+    'MiniBatchSize', 256, ...              % más estable (antes 64)
+    'NumStepsToLookAhead', 5, ...          % menos ruido (antes 10)
+    'ExperienceBufferLength', 200000, ...  % CLAVE (antes 10000)
+    'DiscountFactor', 0.995 );             % más crédito temporal
 
-
- agentOptions.EpsilonGreedyExploration.EpsilonDecay = 1e-4;
- agentOptions.EpsilonGreedyExploration.Epsilon = 1; % default
- agentOptions.EpsilonGreedyExploration.EpsilonMin = 0.01; % default
-
-agent = rlDQNAgent(observationInfo,actionInfo, initOpts, agentOptions);
+agentOptions.EpsilonGreedyExploration.Epsilon = 1.0;
+agentOptions.EpsilonGreedyExploration.EpsilonMin = 0.02;
+agentOptions.EpsilonGreedyExploration.EpsilonDecay = 2e-5; % decae más rápido
 
 critic = agent.getCritic;
-critic.Options.LearnRate = 0.01; % default
+critic.Options.LearnRate = 1e-3;  % antes 0.01 (demasiado alta)
 agent = agent.setCritic(critic);
+
 end
  

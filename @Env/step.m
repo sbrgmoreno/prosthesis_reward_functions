@@ -1,227 +1,149 @@
 function [observation, reward, isDone, loggedSignals] = step(this, action)
+
     % Increment step counter
     this.c = this.c + 1;
 
-    % --- action verification depending matlab vers.
-    % if ~isequal(matlabRelease.Release, "R2021b")
-    %     action = action{1};
-    % end
+    % RESET logs por episodio
+    if this.c == 1
+        this.meanDistLog = NaN(1, this.maxNumberStepsInEpisodes);
+        this.mseLog      = NaN(1, this.maxNumberStepsInEpisodes);
+        this.successLog  = NaN(1, this.maxNumberStepsInEpisodes);
+    end
 
+    % --- action checks
     if this.unifyActions
         action = action * [1 1 1 1];
     end
+    if iscell(action), action = cell2mat(action); end
+    if ~isnumeric(action), error('action must be numeric'); end
 
-    % Ensure action is numeric and has correct size
-    if iscell(action)
-        action = cell2mat(action);
-    end
-    if ~isnumeric(action)
-        error('action must be of numeric type');
-    end
-
-    expectedActionSize = size(this.actionLog, 2);
-    if size(action, 2) ~= expectedActionSize
-        error('The action size does not match the actionLog size');
+    expectedActionSize = size(this.actionLog,2);
+    if size(action,2) ~= expectedActionSize
+        error('Action size does not match actionLog size');
     end
 
     % Log raw action
-    this.actionLog(this.c, :) = action;
-    fprintf('  actions=[%2d %2d %2d %2d]\n', action);
+    this.actionLog(this.c,:) = action;
 
-    % -----------------------------
-    % Reward (and possibly action saturation)
-    % Ensure reward and rewardVector ALWAYS exist
-    % -----------------------------
-    reward = 0;
-    rewardVector = zeros(1, 4);
-
+    % -----------------------------------------
+    % (1) Acción que se va a ejecutar (SAT opcional)
+    % -----------------------------------------
+    % Aquí NO calculamos reward todavía.
+    % Solo obtenemos la acción "saturada" si aplica.
+    actionSat = action;
     if this.rf_modify_actions
-        % reward_function is allowed to modify/clip action
-        [reward, rewardVector, action] = this.reward_function(this, action, []);
-        fprintf('actionSat=[%2d %2d %2d %2d]\n', action);
-    else
-        % reward_function does NOT modify action
-        [reward, rewardVector] = this.reward_function(this, action, []);
+        % OJO: tu reward_function actualmente devuelve reward también.
+        % Para no romper, llamamos pero IGNORAMOS reward ahora.
+        % Si tu reward modifica la acción, aquí obtenemos actionSat.
+        [~, ~, actionSat] = this.reward_function(this, action, []);
     end
+    this.actionSatLog(this.c,:) = actionSat;
 
-    % Log saturated action (or same action if not modified)
-    this.actionSatLog(this.c, :) = action;
+    % Aplicar speeds para el controlador
+    actionApplied = actionSat .* this.speeds;
 
-    % Apply speeds scaling for controller
-    action = action .* this.speeds;
-
-    %% applying action
+    % -----------------------------------------
+    % (2) Ejecutar acción y leer sensores
+    % -----------------------------------------
     drawnow
     completed = this.prosthesis.sendAllSpeed( ...
-        action(1), action(2), action(3), action(4));
-
+        actionApplied(1), actionApplied(2), actionApplied(3), actionApplied(4));
     assert(completed, 'ERROR during sending speed to controller')
 
-    %% waiting data, applying action.
     while this.periodTic.toc() < this.period
         drawnow
     end
-
     if this.wait_in_step
-        % waiting when half-hardware execution
         while toc(this.period_realTic) < this.period
             drawnow
         end
     end
 
-    %% reading hardware
     if this.usePrerecorded
-        % only waits a period
         t_elapsed = this.periodTic.elapsed_time;
-        % supposedly it is a period
-        assert(t_elapsed > 0.9*this.period && t_elapsed < 1.1*this.period, ...
-            "time elapsed %.2f is incorrect, must be %.2f", ...
-            t_elapsed, this.period)
         emg = this.myo.readEmg(t_elapsed);
         flexData = this.glove.read(t_elapsed);
     else
-        emg = this.myo.readEmg();      % E-by-8
-        flexData = this.glove.read();  % n-by-9 double
+        emg = this.myo.readEmg();
+        flexData = this.glove.read();
     end
 
-    motorData = this.prosthesis.read(); % m-by-4 double
+    motorData = this.prosthesis.read();
     this.encoderLog{this.c} = motorData;
 
-    if isempty(emg)
-        emg = this.emg;
-        warning("--------------------emg is empty")
-    else
-        this.emg = emg;
-    end
+    % fallbacks
+    if isempty(emg), emg = this.emg; else, this.emg = emg; end
+    if isempty(motorData), motorData = this.motorData; else, this.motorData = motorData; end
+    if isempty(flexData), flexData = this.flexData; else, this.flexData = flexData; end
 
-    if isempty(motorData)
-        motorData = this.motorData;
-        warning("--------------------motorData is empty")
-    else
-        this.motorData = motorData;
-    end
-
-    if isempty(flexData)
-        flexData = this.flexData;
-        warning("--------------------flexdata is empty")
-    else
-        this.flexData = flexData;
-    end
-
-    % --- end step timing
+    % reset timers
     this.periodTic.tic();
-    if this.wait_in_step
-        this.period_realTic = tic;
-    end
+    if this.wait_in_step, this.period_realTic = tic; end
 
-    this.log(sprintf( ...
-        '%d. T=%.3f[s]. EmgSize %d. encodersSize %d. glovesize %d', ...
-        this.c, this.episodeTic.toc(this.c), ...
-        size(emg, 1), size(motorData, 1), size(flexData, 1)))
-
-    %% Update prosthesis states
+    % -----------------------------------------
+    % (3) Actualizar estado y variables auxiliares
+    % -----------------------------------------
     this.State = this.calculateState(emg, motorData);
     observation = this.State;
 
-    %% Update aux vars used for logging/plotting
     this.flexConverted = this.flexJoined_scaler(reduceFlexDimension(this.flexData));
-    this.adjustEnc = this.flexJoined_scaler(encoder2Flex(this.motorData));
-    %%%%%%%%%%%%%%%%%%%%%%%%----------------------%%%%%%%%%%%%%%%%%%%%%%%%%
-                    %   SENSIBILIDAD q(t+1) - q   %
-    %%%%%%%%%%%%%%%%%%%%%%%%----------------------%%%%%%%%%%%%%%%%%%%%%%%%%
+    this.adjustEnc     = this.flexJoined_scaler(encoder2Flex(this.motorData));
 
-    % =========================
-    % Sensitivity instrumentation
-    % =========================
-    % 1) Acción discreta (antes de speeds)
-    % OJO: aquí usamos la acción ya guardada en actionSatLog (la que ejecutaste)
-    % Acción antes de speeds (discreta/real)
-    a_raw = this.actionSatLog(this.c, :);   % o this.actionLog(this.c,:) si prefieres
-    this.aRawLog(this.c, :) = a_raw;
-    
-    % Acción aplicada (después de speeds)
-    a_applied = a_raw .* this.speeds;
-    this.aAppliedLog(this.c, :) = a_applied;
-    
-    % Estado actual q (encoder->flex)
-    q = this.adjustEnc(end, :);            % 1x4
-    this.qLog(this.c, :) = q;
-    
-    % Referencia q_ref
-    q_ref = this.flexConverted(end, :);    % 1x4 (target)
-    this.qRefLog(this.c, :) = q_ref;
-    
-    % Error y norma
-    e = q - q_ref;
-    this.errNormLog(this.c) = norm(e);
-    
-    % Delta q
-    if this.c == 1
-        dq = [0 0 0 0];
+    % -----------------------------------------
+    % (4) Ahora SÍ calcular reward (ya existe q_ref)
+    % -----------------------------------------
+    reward = 0;
+    rewardVector = zeros(1, expectedActionSize);
+
+    if this.rf_modify_actions
+        % si tu reward depende de flexConverted/adjustEnc ya está listo
+        [reward, rewardVector, ~] = this.reward_function(this, actionSat, []);
     else
-        dq = this.qLog(this.c, :) - this.qLog(this.c-1, :);
+        [reward, rewardVector] = this.reward_function(this, actionSat, []);
     end
-    this.dqLog(this.c, :) = dq;
-    this.effectNormLog(this.c) = norm(dq);
-    
-    % ¿Acción en dirección correcta?
-    % dirección correcta: si q < q_ref => deberíamos aumentar (acción +)
-    % si q > q_ref => deberíamos disminuir (acción -)
-    dirAgree = zeros(1,4);
-    for i=1:4
-        if q(i) < q_ref(i)
-            correct = 1;
-        elseif q(i) > q_ref(i)
-            correct = -1;
-        else
-            correct = 0;
-        end
-        dirAgree(i) = (a_raw(i) == correct);
-    end
-    this.dirAgreeLog(this.c, :) = dirAgree;
-    %%%%%%%%%%%%%%%%%%%%%%%%----------------------%%%%%%%%%%%%%%%%%%%%%%%%%
-    %%%%%%%%%%%%%%%%%%%%%%%%----------------------%%%%%%%%%%%%%%%%%%%%%%%%%
-    %% logs
-    this.emgLog{this.c} = emg;
-    this.encoderAdjustedLog{this.c} = this.adjustEnc;
-    this.rewardLog(this.c) = reward;
-    this.rewardIndividualLog{this.c} = rewardVector; % save individual rewards
-    this.flexConvertedLog{this.c} = this.flexConverted;
 
-    % ---- Guardado de métricas por step ----
-    % (Asegúrate de que tu reward asigna these three every step)
+    % -----------------------------------------
+    % (5) Métricas SIEMPRE en step.m
+    % -----------------------------------------
+    q     = this.adjustEnc(end,:);
+    q_ref = this.flexConverted(end,:);
+    e = q - q_ref;
+
+    this.meanDistStep = mean(abs(e));
+    this.mseStep      = mean(e.^2);
+
+    thrSuccess = 0.03;
+    this.successStep  = all(abs(e) < thrSuccess);
+
+    % logs
+    this.rewardLog(this.c) = reward;
+    this.rewardIndividualLog{this.c} = rewardVector;
+    this.flexConvertedLog{this.c} = this.flexConverted;
+    this.encoderAdjustedLog{this.c} = this.adjustEnc;
+    this.emgLog{this.c} = emg;
+
     this.meanDistLog(this.c) = this.meanDistStep;
     this.mseLog(this.c)      = this.mseStep;
     this.successLog(this.c)  = this.successStep;
 
-    %% Check terminal condition
-    isDone = this.checkEndEpisode(); % || finishEpisode
+    % terminar episodio
+    isDone = this.checkEndEpisode();
 
-    % ---- Si el episodio terminó, calcular métricas agregadas ----
     if isDone
         this.episodeCount = this.episodeCount + 1;
-
-        this.meanDistEpisode(this.episodeCount) = ...
-            mean(this.meanDistLog(1:this.c), 'omitnan');
-
-        this.successRateEpisode(this.episodeCount) = ...
-            mean(this.successLog(1:this.c), 'omitnan');
-
-        this.mseEpisode(this.episodeCount) = ...
-            mean(this.mseLog(1:this.c), 'omitnan');
+        this.meanDistEpisode(this.episodeCount) = mean(this.meanDistLog(1:this.c), 'omitnan');
+        this.successRateEpisode(this.episodeCount) = mean(this.successLog(1:this.c), 'omitnan');
+        this.mseEpisode(this.episodeCount) = mean(this.mseLog(1:this.c), 'omitnan');
     end
 
     if isDone && this.flagSaveTraining
         this.saveEpisode();
     end
 
-    % (optional) use notifyEnvUpdated to signal that the environment has been updated
     notifyEnvUpdated(this);
-
-    loggedSignals = []; % not used
+    loggedSignals = [];
     drawnow
 end
-
 
 
 

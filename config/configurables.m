@@ -83,7 +83,7 @@ if ~params.run_training
         );
 else
     params.RLtrainingOptions = rlTrainingOptions(...
-        'MaxEpisodes',25000,... % when too many episodes it makes slower creating episode =20000000
+        'MaxEpisodes',3000,... % when too many episodes it makes slower creating episode =20000000
         'MaxStepsPerEpisode', params.maxNumberStepsInEpisodes,...
         'StopTrainingCriteria',"AverageReward",...
         'StopTrainingValue', 600,... % new rewards
@@ -109,7 +109,7 @@ end
 if ~params.newTraining
 
     params.agentFile = ...
-        "C:\trainedAgentsProtesisNew\00_oldy\_\DDQN_Fixed_MEtrics\V7_25000_Epocas\26-02-25 16 43 58\Agent25000.mat";
+        "C:\trainedAgentsProtesisNew\00_oldy\_\DDQN_Fixed_MEtrics\V8\26-02-26 11 32 35\Agent25000.mat";
     params.agent_id = 'best'; %'QRDQN_v6';%'best'; % or name
     % params.agentFile = ...
     %     ".\trainedAgents\Agent3.mat";
