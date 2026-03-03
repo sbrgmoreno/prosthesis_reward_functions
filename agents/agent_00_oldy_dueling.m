@@ -2,46 +2,43 @@ function agent = agent_00_oldy_dueling(observationInfo, actionInfo)
 
 hL = @reluLayer;
 numActions = numel(actionInfo.Elements);
-
-% Dimensión de entrada (en tu red actual es 44)
 numObs = prod(observationInfo.Dimension);
 
-% ---------- TRONCO compartido ----------
+% =========================
+% 1) RED DUELING (SIN DROPOUT)
+% =========================
+% Tronco compartido
 statePath = [
-    featureInputLayer(numObs, "Name", "observation")
-    fullyConnectedLayer(64, "Name", "fc_1")
-    hL("Name", "hL1")
-    dropoutLayer(0.1, "Name", "dropout1")
-    fullyConnectedLayer(32, "Name", "fc_2")
-    hL("Name", "hL2")
-    dropoutLayer(0.1, "Name", "dropout2")
-    fullyConnectedLayer(32, "Name", "fc_3")
-    hL("Name", "hL3")
+    featureInputLayer(numObs, "Name", "observation", "Normalization","none")
+    fullyConnectedLayer(128, "Name", "fc1")
+    hL("Name", "relu1")
+    fullyConnectedLayer(128, "Name", "fc2")
+    hL("Name", "relu2")
 ];
 
-% ---------- VALUE head: V(s) -> 1 ----------
+% Value head V(s)
 valuePath = [
-    fullyConnectedLayer(32, "Name", "v_fc1")
-    hL("Name", "v_h1")
+    fullyConnectedLayer(64, "Name", "v_fc1")
+    hL("Name", "v_relu1")
     fullyConnectedLayer(1, "Name", "V")
 ];
 
-% ---------- ADVANTAGE head: A(s,a) -> numActions ----------
+% Advantage head A(s,a)
 advPath = [
-    fullyConnectedLayer(32, "Name", "a_fc1")
-    hL("Name", "a_h1")
+    fullyConnectedLayer(64, "Name", "a_fc1")
+    hL("Name", "a_relu1")
     fullyConnectedLayer(numActions, "Name", "A")
 ];
 
-% ---------- Construir grafo ----------
+% Grafo
 lgraph = layerGraph(statePath);
 lgraph = addLayers(lgraph, valuePath);
 lgraph = addLayers(lgraph, advPath);
 
-lgraph = connectLayers(lgraph, "hL3", "v_fc1");
-lgraph = connectLayers(lgraph, "hL3", "a_fc1");
+lgraph = connectLayers(lgraph, "relu2", "v_fc1");
+lgraph = connectLayers(lgraph, "relu2", "a_fc1");
 
-% concat [V; A]
+% Concat [V;A]
 concatVA = concatenationLayer(1, 2, "Name", "concat_VA");
 lgraph = addLayers(lgraph, concatVA);
 lgraph = connectLayers(lgraph, "V", "concat_VA/in1");
@@ -52,45 +49,63 @@ duel = DuelingCombineLayer(numActions, "dueling_combine");
 lgraph = addLayers(lgraph, duel);
 lgraph = connectLayers(lgraph, "concat_VA", "dueling_combine");
 
-% ---------- Opciones de representación (igual que tu oldy) ----------
-opt = rlRepresentationOptions( ...
-    'LearnRate', 1e-4, ...
-    'L2RegularizationFactor', 5e-5, ...
-    'Optimizer', 'adam');
+% =========================
+% 2) CRITIC OPTIONS (ESTABLE)
+% =========================
+repOpts = rlRepresentationOptions( ...
+    'Optimizer','adam', ...
+    'LearnRate', 1e-3, ...                 % (1e-4 puede ser lento; 1e-3 suele ir mejor)
+    'L2RegularizationFactor', 1e-5, ...
+    'GradientThreshold', 1);               % anti-explosión
 
-opt.OptimizerParameters.GradientDecayFactor = 0.85;
-opt.OptimizerParameters.Momentum = 0.85;
+% Si quieres fijar betas de Adam (opcional; puedes comentar si no existe en tu versión)
+% repOpts.OptimizerParameters.GradientDecayFactor = 0.9;
+% repOpts.OptimizerParameters.SquaredGradientDecayFactor = 0.999;
 
-% Critic con layerGraph (dueling)
 critic = rlQValueRepresentation(lgraph, observationInfo, actionInfo, ...
-    'Observation', {'observation'}, opt);
+    'Observation', {'observation'}, repOpts);
 
-% ---------- Opciones DQN (igual que tu oldy + PER) ----------
-agentOptions = rlDQNAgentOptions(...
+% =========================
+% 3) DQN OPTIONS (DUELING + DOUBLE)
+% =========================
+agentOptions = rlDQNAgentOptions( ...
     'UseDoubleDQN', true, ...
-    'SequenceLength', 1, ...
-    'TargetUpdateMethod','smoothing', ...
-    'TargetSmoothFactor', 0.05, ...
-    'TargetUpdateFrequency', 3, ...
-    'ResetExperienceBufferBeforeTraining', false, ...
-    'SaveExperienceBufferWithAgent', true, ...
     'MiniBatchSize', 64, ...
-    'NumStepsToLookAhead', 2, ...
-    'ExperienceBufferLength', 1e6, ...
-    'DiscountFactor', 0.97);
+    'DiscountFactor', 0.99, ...
+    'NumStepsToLookAhead', 3, ...          % más estable que 10
+    'ExperienceBufferLength', 200000, ...  % en vez de 1e6
+    'ResetExperienceBufferBeforeTraining', true, ...
+    'SaveExperienceBufferWithAgent', true, ...
+    'SequenceLength', 1);
 
-agentOptions.EpsilonGreedyExploration.EpsilonDecay = 15e-5;
-agentOptions.EpsilonGreedyExploration.Epsilon = 1;
-agentOptions.EpsilonGreedyExploration.EpsilonMin = 0.001;
+% ---- Target update (elige UNA estrategia)
+
+% (A) smoothing estable
+agentOptions.TargetUpdateMethod   = 'smoothing';
+agentOptions.TargetSmoothFactor   = 1e-3;
+agentOptions.TargetUpdateFrequency = 1;
+
+% % (B) periodic (alternativa)
+% agentOptions.TargetUpdateMethod   = 'periodic';
+% agentOptions.TargetUpdateFrequency = 200;
+
+% Exploración (más sana)
+agentOptions.EpsilonGreedyExploration.Epsilon     = 1.0;
+agentOptions.EpsilonGreedyExploration.EpsilonMin  = 0.02;
+agentOptions.EpsilonGreedyExploration.EpsilonDecay = 2e-4;
 
 agent = rlDQNAgent(critic, agentOptions);
 
-% ---------- PER ----------
+% =========================
+% 4) PER (Prioritized Replay)
+% =========================
 bufferLength = agentOptions.ExperienceBufferLength;
 perBuffer = rlPrioritizedReplayMemory(observationInfo, actionInfo, bufferLength);
-perBuffer.PriorityExponent = 0.6;
-perBuffer.InitialImportanceSamplingExponent = 0.4;
-perBuffer.NumAnnealingSteps = bufferLength;
+
+perBuffer.PriorityExponent = 0.6;                 % alpha
+perBuffer.InitialImportanceSamplingExponent = 0.4; % beta0
+perBuffer.NumAnnealingSteps = 200000;             % no uses bufferLength si es enorme
+
 agent.ExperienceBuffer = perBuffer;
 
 end

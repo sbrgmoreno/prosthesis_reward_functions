@@ -51,6 +51,14 @@ features = [
 if nargin > 1
     %normalicing
     L = size(features, 1);
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    %%%%%%%%% PRINTS DEL ASSERT %%%%%%%%%%%%%%%%%%
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    % justo antes del assert(L==40)
+    disp("DEBUG getWmoosFeatures")
+    disp(size(x))      % o emg
+    disp(L)
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     assert(L == 40, ...
         "Wrong size of EMG features msut be 40 it is %d", L)
     features = normalize(features,'center',C,'scale',S);

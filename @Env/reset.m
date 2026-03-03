@@ -203,6 +203,16 @@ if this.wait_in_step % CHECK why tic twice??
     this.period_realTic = tic;
     this.episode_realTic = tic;
 end
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% --- init logs por step para el nuevo episodio
+this.meanDistLog = NaN(1, this.maxNumberStepsInEpisodes);
+this.mseLog      = NaN(1, this.maxNumberStepsInEpisodes);
+this.successLog  = NaN(1, this.maxNumberStepsInEpisodes);
+
+% --- sensibilidad (si la usas)
+this.dErrLog = NaN(1, this.maxNumberStepsInEpisodes);
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 this.c = 0;
 this.isDone = false;
 end

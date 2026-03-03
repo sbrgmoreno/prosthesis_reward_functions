@@ -131,9 +131,6 @@ classdef Env < rl.env.MATLABEnvironment
         %%%%%%%%%%%%%%%%%%%%%%%%----------------------%%%%%%%%%%%%%%%%%%%%%%%%%
         %%%%%%%%%%%%%%%%%%%%%%%%----------------------%%%%%%%%%%%%%%%%%%%%%%%%%
         % ---- Current-step metrics (NEW)
-        %meanDistStep = NaN;    % escalar por step
-        %mseStep      = NaN;    % escalar por step
-        %successStep  = false;  % bool por step
         % ---- Per-step metric logs (new)
         meanDistLog = [];   % [maxSteps x 1]
         mseLog = [];        % [maxSteps x 1]
