@@ -36,6 +36,9 @@ Matlab R2021b.
 
 %%
 X = emg';
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+x = X;   % compatibilidad: evita errores si funciones internas usan 'x'
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 f1 = WMoos_F1(X);
 f2 = WMoos_F2(X);
 f3 = WMoos_F4(X);
@@ -51,14 +54,14 @@ features = [
 if nargin > 1
     %normalicing
     L = size(features, 1);
-    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    %%%%%%%%% PRINTS DEL ASSERT %%%%%%%%%%%%%%%%%%
-    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    % justo antes del assert(L==40)
-    disp("DEBUG getWmoosFeatures")
-    disp(size(x))      % o emg
-    disp(L)
-    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    % %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    % %%%%%%%%% PRINTS DEL ASSERT %%%%%%%%%%%%%%%%%%
+    % %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    % % justo antes del assert(L==40)
+    % disp("DEBUG getWmoosFeatures")
+    % disp(size(X))      % o emg %x
+    % disp(L)
+    % %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     assert(L == 40, ...
         "Wrong size of EMG features msut be 40 it is %d", L)
     features = normalize(features,'center',C,'scale',S);

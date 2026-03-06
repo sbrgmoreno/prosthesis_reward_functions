@@ -36,6 +36,20 @@ repetitionId = this.repetitionId;
 flexConvertedLog = this.flexConvertedLog(1:this.c);
 episodeTimestamp = this.episodeTimestamp;
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%      EVITAR ERRORES DE  GUARDADO         %%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+if isempty(this.episode_folder) || strlength(string(this.episode_folder)) == 0
+    this.episode_folder = string(fullfile(getenv("USERPROFILE"), "Documents", "MATLAB", "prosthesis_episodes"));
+end
+if ~exist(this.episode_folder, "dir")
+    mkdir(this.episode_folder);
+end
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+
 save(sprintf('%s\\episode%05d.mat',this.episode_folder,this.episodeCounter) ...
     ,"rewardLog","actionLog", "actionSatLog", "encoderLog", ...
     "flexConvertedLog", "repetitionId", "episodeTimestamp", ...

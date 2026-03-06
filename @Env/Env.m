@@ -157,6 +157,9 @@ classdef Env < rl.env.MATLABEnvironment
         effectNormLog = [];  % [maxSteps x 1] norm(dq)
         errNormLog = [];     % [maxSteps x 1] norm(q-q_ref)
         dErrLog = [];
+        %-------------------------------------------------------------------%
+        encRawLog = [];         % [maxSteps x 4] encoder crudo
+        encEffectNormLog = [];  % [maxSteps x 1] norm(dEncoderCrudo)
         %%%%%%%%%%%%%%%%%%%%%%%%----------------------%%%%%%%%%%%%%%%%%%%%%%%%%
         %%%%%%%%%%%%%%%%%%%%%%%%----------------------%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -170,19 +173,16 @@ classdef Env < rl.env.MATLABEnvironment
         meanDistStep = NaN;    % escalar por step
         mseStep      = NaN;    % escalar por step
         successStep  = false;  % bool por step
-        % % ---- Per-step metric logs (new)
-        % meanDistLog = [];   % [maxSteps x 1]
-        % mseLog = [];        % [maxSteps x 1]
-        % successLog = [];    % [maxSteps x 1]
-        % 
-        % % ---- Per-episode metric logs (new)
-        % episodeCount = 0;        % contador para métricas agregadas (separado de episodeCounter si quieres)
-        % meanDistEpisode = [];    % [numEpisodes x 1]
-        % successRateEpisode = []; % [numEpisodes x 1]
-        % mseEpisode = [];         % [numEpisodes x 1]
+        
+
+        forceActionDebug = false;          % OFF por defecto
+        forcedActionValue = ones(1,4);     % valor cuando esté ON
         %%%%%%%%%%%%%%%%%%%%%%%%----------------------%%%%%%%%%%%%%%%%%%%%%%%%%
         %%%%%%%%%%%%%%%%%%%%%%%%----------------------%%%%%%%%%%%%%%%%%%%%%%%%%
     end
+
+
+
 
     methods
         %% Constructor
@@ -212,6 +212,20 @@ classdef Env < rl.env.MATLABEnvironment
 
             % --- inmutable properties
             this.episode_folder = agent_dir;
+
+            %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+            %%%%%%%%%%%%%%%% CUANDO NO HAY CARPETA DONDE EJECUTAR %%%%%%%%%
+            %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+            % --- episode saving folder (robust default)
+            if strlength(agent_dir) == 0
+                this.episode_folder = string(fullfile(getenv("USERPROFILE"), "Documents", "MATLAB", "prosthesis_episodes"));
+            else
+                this.episode_folder = agent_dir;
+            end
+            if ~exist(this.episode_folder, "dir")
+                mkdir(this.episode_folder);
+            end
+            %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
             % --- hardware
             this.usePrerecorded = usePrerecorded;

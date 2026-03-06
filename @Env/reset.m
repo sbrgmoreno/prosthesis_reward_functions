@@ -115,56 +115,138 @@ if this.wait_in_step
     this.episode_realTic = tic;
 end
 
-while true
-    this.glove.resetBuffer();
-    this.myo.resetBuffer();
-    this.prosthesis.resetBuffer();
-    drawnow
-    this.periodTic.tic();
 
-    %% close hand
-    if this.episodeType == EpisodeType.Opening
-        this.prosthesis.closeHand();
-        this.episodeTic.toc(10000);
-        this.prosthesis.read();
-        this.prosthesis.stop();
-    else
-        this.prosthesis.resetBuffer();
-    end
-    drawnow
-    this.log("Reseting: waiting for buffer data");
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%% reseting buffer and getting initial data (robust)        %%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
+    % --- reseting buffer and getting initial data (robust)
     if this.wait_in_step
         this.period_realTic = tic;
-        % waiting when half-hardware execution
-        while toc(this.period_realTic) < this.period
-            drawnow
+        this.episode_realTic = tic;
+    end
+    
+    MAX_TRIES = 10;
+    gotData = false;
+    
+    for attempt = 1:MAX_TRIES
+        this.glove.resetBuffer();
+        this.myo.resetBuffer();
+        this.prosthesis.resetBuffer();
+        drawnow
+        this.periodTic.tic();
+    
+        %% close hand
+        if this.episodeType == EpisodeType.Opening
+            this.prosthesis.closeHand();
+            this.episodeTic.toc(10000);
+            this.prosthesis.read();
+            this.prosthesis.stop();
+        else
+            this.prosthesis.resetBuffer();
+        end
+        drawnow
+        this.log("Reseting: waiting for buffer data");
+    
+        % ---- IMPORTANT: no "waiting loops" in prerecorded/simulation mode
+        if this.usePrerecorded
+            % In prerecorded, we should NOT wait real time.
+            % Just request a window; if empty, retry a few times then fail.
+            emg = this.myo.readEmg(this.period);
+            flexData = this.glove.read(this.period);
+        else
+            % Real/half-hardware timing behavior
+            if this.wait_in_step
+                this.period_realTic = tic;
+                while toc(this.period_realTic) < this.period
+                    drawnow
+                end
+            else
+                while this.periodTic.toc() < this.period
+                    drawnow
+                end
+            end
+    
+            emg = this.myo.readEmg();      % E-by-8
+            flexData = this.glove.read();  % n-by-9
+        end
+    
+        this.log("Reseting: reading hardware");
+        motorData = this.prosthesis.read(); % m-by-4
+    
+        if ~isempty(flexData) && ~isempty(emg)
+            gotData = true;
+            break
+        else
+            warning("Reset: No flex or EMG data (attempt %d/%d).", attempt, MAX_TRIES);
+            pause(0.05);
         end
     end
-
-    if this.usePrerecorded
-        % only in this case, it waits a period
-        emg = this.myo.readEmg(this.period);
-        flexData = this.glove.read(this.period);
-    else
-        while this.periodTic.toc() < this.period
-            drawnow
-        end
-
-        emg = this.myo.readEmg(); % E-by-8
-        flexData = this.glove.read(); % n-by-9 double
+    
+    if ~gotData
+        error("RESET TIMEOUT: No llegó EMG/flex después de %d intentos. Revisa RecordedMyo/RecordedGlove y period.", MAX_TRIES);
     end
 
-    this.log("Reseting: reading hardware");
-    motorData = this.prosthesis.read(); % m-by-4 double
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-    if ~isempty(flexData) && ~isempty(emg)
-        break
-    else
-        warning('No flex or EMG data, waiting again')
-        pause(0.5); % Espera un poco antes de intentar nuevamente
-    end
-end
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%% BUBLE WHILE ANTERIOR %%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% while true
+%     this.glove.resetBuffer();
+%     this.myo.resetBuffer();
+%     this.prosthesis.resetBuffer();
+%     drawnow
+%     this.periodTic.tic();
+% 
+%     %% close hand
+%     if this.episodeType == EpisodeType.Opening
+%         this.prosthesis.closeHand();
+%         this.episodeTic.toc(10000);
+%         this.prosthesis.read();
+%         this.prosthesis.stop();
+%     else
+%         this.prosthesis.resetBuffer();
+%     end
+%     drawnow
+%     this.log("Reseting: waiting for buffer data");
+% 
+%     if this.wait_in_step
+%         this.period_realTic = tic;
+%         % waiting when half-hardware execution
+%         while toc(this.period_realTic) < this.period
+%             drawnow
+%         end
+%     end
+% 
+%     if this.usePrerecorded
+%         % only in this case, it waits a period
+%         emg = this.myo.readEmg(this.period);
+%         flexData = this.glove.read(this.period);
+%     else
+%         while this.periodTic.toc() < this.period
+%             drawnow
+%         end
+% 
+%         emg = this.myo.readEmg(); % E-by-8
+%         flexData = this.glove.read(); % n-by-9 double
+%     end
+% 
+%     this.log("Reseting: reading hardware");
+%     motorData = this.prosthesis.read(); % m-by-4 double
+% 
+%     if ~isempty(flexData) && ~isempty(emg)
+%         break
+%     else
+%         warning('No flex or EMG data, waiting again')
+%         pause(0.5); % Espera un poco antes de intentar nuevamente
+%     end
+% end
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 this.emg = emg;
 this.motorData = motorData;
@@ -213,6 +295,17 @@ this.successLog  = NaN(1, this.maxNumberStepsInEpisodes);
 % --- sensibilidad (si la usas)
 this.dErrLog = NaN(1, this.maxNumberStepsInEpisodes);
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% --- Sync sim timing counters at episode start (avoid timing going backwards)
+this.episodeTic.tic();
+this.periodTic.tic();
+this.prosthesis.resetBuffer();
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
 this.c = 0;
 this.isDone = false;
 end
