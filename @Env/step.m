@@ -292,7 +292,7 @@ function [observation, reward, isDone, loggedSignals] = step(this, action)
     this.meanDistStep = mean(abs(e));
     this.mseStep      = mean(e.^2);
 
-    thrSuccess = 0.03;
+    thrSuccess = 0.15; %0.03;
     this.successStep  = all(abs(e) < thrSuccess);
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

@@ -1,4 +1,4 @@
-function [reward, rewardVector, action] = legacy_distanceRewarding(this, action)
+%function [reward, rewardVector, action] = legacy_distanceRewarding(this, action)
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%      VERSION v0     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -2051,158 +2051,358 @@ function [reward, rewardVector, action] = legacy_distanceRewarding(this, action)
 % 
 % end
 
-% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% %%%%%%%%%%%%%%%% VERSION 10 %%%%%%%%%%%%%%%%%%
-% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%function [reward, rewardVector, action] = reward_v10_lyapunov_window(this, action, ~)
-% ==========================================================
-% Reward V10: Lyapunov progress + Moving Window smoothing
-% - Objetivo: alinear reward con Mean|q - qref| y MSE
-% - r_prog = k * (V_prev - V_curr), V = e^2
-% - e = mean(abs(q - qref))
-% ==========================================================
+% % %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% % %%%%%%%%%%%%%%%% VERSION 10 %%%%%%%%%%%%%%%%%%
+% % %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% %function [reward, rewardVector, action] = reward_v10_lyapunov_window(this, action, ~)
+% % ==========================================================
+% % Reward V10: Lyapunov progress + Moving Window smoothing
+% % - Objetivo: alinear reward con Mean|q - qref| y MSE
+% % - r_prog = k * (V_prev - V_curr), V = e^2
+% % - e = mean(abs(q - qref))
+% % ==========================================================
+% 
+% persistent prevV prevE stepCount
+% persistent inactiveSteps prevPosFlex
+% persistent errWindow
+% 
+% % -------------------------
+% % Reset por episodio
+% % -------------------------
+% if isempty(stepCount); stepCount = 0; end
+% if this.c == 1
+%     stepCount = 0;
+%     prevV = NaN;
+%     prevE = NaN;
+% 
+%     inactiveSteps = 0;
+%     prevPosFlex = zeros(size(action));
+% 
+%     % ventana de error (moving window)
+%     W = 10;  % ventana (5..20 recomendado)
+%     errWindow = NaN(1, W);
+% end
+% 
+% stepCount = stepCount + 1;
+% 
+% % -------------------------
+% % Parámetros principales
+% % -------------------------
+% opts.gamma = 0.99;
+% 
+% % Pesos (ajustables)
+% kProgress   = 200;   % escala del progreso Lyapunov (50..400)
+% kErrorAbs   = 5;     % penalización base por error medio (1..10)
+% kSmooth     = 2;     % penalización por cambio brusco (0.5..5)
+% kInactive   = 1.0;   % penalización por inactividad acumulada
+% kMoveBonus  = 0.5;   % pequeño bonus por moverse
+% successBonus = 20;   % bonus si llega cerca (10..80)
+% 
+% % Umbrales
+% epsNear = 0.03;      % “cerca” por motor
+% epsFar  = 0.06;      % “lejos” para inactividad
+% 
+% % Clipping
+% clipLimit = 20;
+% 
+% rewardVector = zeros(1, numel(action));
+% 
+% % -------------------------
+% % Obtener referencia y estado actual
+% % -------------------------
+% if this.c == 1
+%     flexConv = this.flexJoined_scaler(reduceFlexDimension(this.flexData));
+% else
+%     flexConv = this.flexConvertedLog{this.c - 1};
+% end
+% 
+% pos = this.motorData(end, :);
+% posFlex = this.flexJoined_scaler(encoder2Flex(pos));
+% 
+% % Error por motor y global
+% err = abs(posFlex - flexConv(end, :));      % vector error motor
+% e = mean(err);                               % error global mean(|q-qref|)
+% mse = mean((posFlex - flexConv(end, :)).^2); % MSE global
+% 
+% % Guardar métricas para logs (esto lo lee step.m)
+% this.meanDistStep = e;
+% this.mseStep = mse;
+% 
+% % Success step: "éxito" si todos los motores están cerca
+% this.successStep = all(err < epsNear);
+% 
+% % -------------------------
+% % Ventana deslizante (suavizado del error)
+% % -------------------------
+% errWindow = [errWindow(2:end), e];
+% eWin = mean(errWindow, 'omitnan');  % error suavizado por ventana
+% V = eWin^2;                         % energía Lyapunov basada en ventana
+% 
+% % -------------------------
+% % 1) Reward de progreso Lyapunov
+% % -------------------------
+% if isnan(prevV)
+%     r_prog = 0;  % no castigar primer step
+% else
+%     r_prog = kProgress * (prevV - V);
+% end
+% prevV = V;
+% 
+% % -------------------------
+% % 2) Penalización por error absoluto
+% % -------------------------
+% r_err = -kErrorAbs * eWin;
+% 
+% % -------------------------
+% % 3) Penalización por suavidad / cambios bruscos
+% % -------------------------
+% delta = posFlex - prevPosFlex;
+% r_smooth = -kSmooth * mean(abs(delta));
+% prevPosFlex = posFlex;
+% 
+% % -------------------------
+% % 4) Penalización por inactividad cuando está lejos
+% % -------------------------
+% if all(action == 0) && any(err > epsFar)
+%     inactiveSteps = inactiveSteps + 1;
+% else
+%     inactiveSteps = 0;
+% end
+% r_inactive = -kInactive * inactiveSteps;
+% 
+% % -------------------------
+% % 5) Bonus por moverse (muy pequeño)
+% % -------------------------
+% r_move = kMoveBonus * any(action ~= 0);
+% 
+% % -------------------------
+% % 6) Bonus por éxito
+% % -------------------------
+% r_success = 0;
+% if all(err < epsNear)
+%     r_success = successBonus;
+% end
+% 
+% % -------------------------
+% % Reward final
+% % -------------------------
+% rewardRaw = r_prog + r_err + r_smooth + r_inactive + r_move + r_success;
+% 
+% % Clipping suave
+% reward = clipLimit * tanh(rewardRaw / clipLimit);
+% 
+% % rewardVector por motor (opcional para debug)
+% rewardVector(:) = reward / numel(action);
+% 
+% % Debug opcional
+% % if mod(this.c, 10)==0
+% %     fprintf("c=%d eWin=%.4f V=%.4f r_prog=%.3f raw=%.3f final=%.3f\n", ...
+% %         this.c, eWin, V, r_prog, rewardRaw, reward);
+% % end
+% 
+% end
+% % %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-persistent prevV prevE stepCount
-persistent inactiveSteps prevPosFlex
-persistent errWindow
 
-% -------------------------
-% Reset por episodio
-% -------------------------
-if isempty(stepCount); stepCount = 0; end
-if this.c == 1
-    stepCount = 0;
-    prevV = NaN;
-    prevE = NaN;
 
-    inactiveSteps = 0;
-    prevPosFlex = zeros(size(action));
-
-    % ventana de error (moving window)
-    W = 10;  % ventana (5..20 recomendado)
-    errWindow = NaN(1, W);
-end
-
-stepCount = stepCount + 1;
-
-% -------------------------
-% Parámetros principales
-% -------------------------
-opts.gamma = 0.99;
-
-% Pesos (ajustables)
-kProgress   = 200;   % escala del progreso Lyapunov (50..400)
-kErrorAbs   = 5;     % penalización base por error medio (1..10)
-kSmooth     = 2;     % penalización por cambio brusco (0.5..5)
-kInactive   = 1.0;   % penalización por inactividad acumulada
-kMoveBonus  = 0.5;   % pequeño bonus por moverse
-successBonus = 20;   % bonus si llega cerca (10..80)
-
-% Umbrales
-epsNear = 0.03;      % “cerca” por motor
-epsFar  = 0.06;      % “lejos” para inactividad
-
-% Clipping
-clipLimit = 20;
-
-rewardVector = zeros(1, numel(action));
-
-% -------------------------
-% Obtener referencia y estado actual
-% -------------------------
-if this.c == 1
-    flexConv = this.flexJoined_scaler(reduceFlexDimension(this.flexData));
-else
-    flexConv = this.flexConvertedLog{this.c - 1};
-end
-
-pos = this.motorData(end, :);
-posFlex = this.flexJoined_scaler(encoder2Flex(pos));
-
-% Error por motor y global
-err = abs(posFlex - flexConv(end, :));      % vector error motor
-e = mean(err);                               % error global mean(|q-qref|)
-mse = mean((posFlex - flexConv(end, :)).^2); % MSE global
-
-% Guardar métricas para logs (esto lo lee step.m)
-this.meanDistStep = e;
-this.mseStep = mse;
-
-% Success step: "éxito" si todos los motores están cerca
-this.successStep = all(err < epsNear);
-
-% -------------------------
-% Ventana deslizante (suavizado del error)
-% -------------------------
-errWindow = [errWindow(2:end), e];
-eWin = mean(errWindow, 'omitnan');  % error suavizado por ventana
-V = eWin^2;                         % energía Lyapunov basada en ventana
-
-% -------------------------
-% 1) Reward de progreso Lyapunov
-% -------------------------
-if isnan(prevV)
-    r_prog = 0;  % no castigar primer step
-else
-    r_prog = kProgress * (prevV - V);
-end
-prevV = V;
-
-% -------------------------
-% 2) Penalización por error absoluto
-% -------------------------
-r_err = -kErrorAbs * eWin;
-
-% -------------------------
-% 3) Penalización por suavidad / cambios bruscos
-% -------------------------
-delta = posFlex - prevPosFlex;
-r_smooth = -kSmooth * mean(abs(delta));
-prevPosFlex = posFlex;
-
-% -------------------------
-% 4) Penalización por inactividad cuando está lejos
-% -------------------------
-if all(action == 0) && any(err > epsFar)
-    inactiveSteps = inactiveSteps + 1;
-else
-    inactiveSteps = 0;
-end
-r_inactive = -kInactive * inactiveSteps;
-
-% -------------------------
-% 5) Bonus por moverse (muy pequeño)
-% -------------------------
-r_move = kMoveBonus * any(action ~= 0);
-
-% -------------------------
-% 6) Bonus por éxito
-% -------------------------
-r_success = 0;
-if all(err < epsNear)
-    r_success = successBonus;
-end
-
-% -------------------------
-% Reward final
-% -------------------------
-rewardRaw = r_prog + r_err + r_smooth + r_inactive + r_move + r_success;
-
-% Clipping suave
-reward = clipLimit * tanh(rewardRaw / clipLimit);
-
-% rewardVector por motor (opcional para debug)
-rewardVector(:) = reward / numel(action);
-
-% Debug opcional
-% if mod(this.c, 10)==0
-%     fprintf("c=%d eWin=%.4f V=%.4f r_prog=%.3f raw=%.3f final=%.3f\n", ...
-%         this.c, eWin, V, r_prog, rewardRaw, reward);
+% % % %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% % % %%%%%%%%%%%%%%%% VERSION 12  (Wen 2019, Borkowska 2022, etc.)%%%%%%%%%%%%%
+% % % %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% %function [reward, rewardVector, actionOut] = progress_shaping_reward_v1(this, action, ~)
+% 
+% persistent prevMeanDist previousAction successCounter
+% 
+% % Acción de salida por defecto
+% actionOut = action;
+% 
+% % Inicialización
+% if isempty(prevMeanDist),  prevMeanDist = NaN; end
+% if isempty(previousAction), previousAction = zeros(size(action)); end
+% if isempty(successCounter), successCounter = 0; end
+% 
+% % Reset por episodio
+% if this.c <= 1
+%     prevMeanDist = NaN;
+%     previousAction = zeros(size(action));
+%     successCounter = 0;
+% end
+% 
+% %% ===== 1) Variables reales del entorno =====
+% q     = this.adjustEnc(end,:);       % encoder normalizado
+% q_ref = this.flexConverted(end,:);   % referencia glove normalizada
+% 
+% e = q - q_ref;
+% e_t = mean(abs(e));                  % error medio absoluto actual
+% 
+% if isnan(prevMeanDist)
+%     delta_e = 0;
+% else
+%     delta_e = prevMeanDist - e_t;    % >0 mejora
+% end
+% 
+% %% ===== 2) Hiperparámetros =====
+% Kp = 40;     % progreso MUCHO más fuerte
+% Kg = 0.3;    % meta más débil
+% Ke = 0.02;   % menos castigo por esfuerzo
+% Kj = 0.02;   % menos castigo por jerk
+% Kd = 2.0;
+% 
+% successThreshold = 0.10;   % más relajado que el de métricas
+% holdSteps = 3;             % pasos consecutivos en éxito
+% successBonus = 30;
+% holdBonus = 15;
+% 
+% %% ===== 3) Términos de reward =====
+% 
+% % (a) progreso: bajar el error
+% r_progress = Kp * delta_e;
+% 
+% % (b) cercanía a la meta
+% r_goal = -Kg * e_t;
+% 
+% % (c) castigo si empeora claramente
+% if delta_e < -0.01
+%     r_diverge = Kd * abs(delta_e);
+% else
+%     r_diverge = 0;
+% end
+% 
+% % (d) castigo por esfuerzo de control
+% r_effort = Ke * mean(abs(action));
+% 
+% % (e) castigo por cambios bruscos de acción
+% r_jerk = Kj * mean(abs(action - previousAction));
+% 
+% % (f) bono por éxito
+% if all(abs(e) < successThreshold)
+%     successCounter = successCounter + 1;
+%     r_success = successBonus;
+% else
+%     successCounter = 0;
+%     r_success = 0;
+% end
+% 
+% if successCounter >= holdSteps
+%     r_success = r_success + holdBonus;
+% end
+% 
+% %% ===== 4) Reward final =====
+% reward = r_progress + r_goal + r_success - r_diverge - r_effort - r_jerk;
+% 
+% % clipping para estabilizar DQN
+% reward = max(min(reward, 25), -25);
+% 
+% %% ===== 5) Reward vector (solo informativo) =====
+% rewardVector = [ ...
+%     r_progress, ...
+%     r_goal, ...
+%     r_success, ...
+%    -r_diverge, ...
+%    -r_effort, ...
+%    -r_jerk];
+% 
+% %% ===== 5.1) Debug de componentes =====
+% if mod(this.c,5) == 0 || this.c == 1
+%     fprintf(['[RW DBG] step=%d | progress=% .4f | goal=% .4f | success=% .4f | ' ...
+%              'divergence=% .4f | effort=% .4f | jerk=% .4f | total=% .4f\n'], ...
+%              this.c, r_progress, r_goal, r_success, -r_diverge, -r_effort, -r_jerk, reward);
+% end
+% %% ===== 6) Actualizar memoria =====
+% prevMeanDist = e_t;
+% previousAction = action;
+% 
 % end
 
-end
-% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
+
+% % % %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% % % %%%%%%%%%%%%%%%% VERSION 13  (Wen 2019, Borkowska 2022, etc.) optimizado %%%%%%%%%%%%%%
+% % % %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+function [reward, rewardVector, actionOut] = legacy_distanceRewarding(this, action, ~)
+
+persistent prevMeanDist previousAction successCounter
+
+actionOut = action;
+
+if isempty(prevMeanDist), prevMeanDist = NaN; end
+if isempty(previousAction), previousAction = zeros(size(action)); end
+if isempty(successCounter), successCounter = 0; end
+
+if this.c <= 1
+    prevMeanDist = NaN;
+    previousAction = zeros(size(action));
+    successCounter = 0;
+end
+
+%% Variables reales del entorno
+q     = this.adjustEnc(end,:);
+q_ref = this.flexConverted(end,:);
+
+e = q - q_ref;
+e_t = mean(abs(e));
+
+if isnan(prevMeanDist)
+    delta_e = 0;
+else
+    delta_e = prevMeanDist - e_t;
+end
+
+%% Hiperparámetros reescalados
+Kp = 40;      % progreso fuerte
+Kg = 0.25;    % castigo por distancia mucho menor
+Ke = 0.02;    % menor castigo por esfuerzo
+Kj = 0.02;    % menor castigo por jerk
+Kd = 0.0;     % divergencia desactivada temporalmente
+
+successThreshold = 0.10;
+holdSteps = 3;
+successBonus = 30;
+holdBonus = 15;
+
+%% Términos
+r_progress = Kp * delta_e;
+r_goal     = -Kg * e_t;
+
+r_diverge = 0;
+r_effort  = Ke * mean(abs(action));
+r_jerk    = Kj * mean(abs(action - previousAction));
+
+if all(abs(e) < successThreshold)
+    successCounter = successCounter + 1;
+    r_success = successBonus;
+else
+    successCounter = 0;
+    r_success = 0;
+end
+
+if successCounter >= holdSteps
+    r_success = r_success + holdBonus;
+end
+
+%% Reward total
+reward = r_progress + r_goal + r_success - r_diverge - r_effort - r_jerk;
+reward = max(min(reward, 25), -25);
+
+%% Vector informativo
+rewardVector = [ ...
+    r_progress, ...
+    r_goal, ...
+    r_success, ...
+   -r_diverge, ...
+   -r_effort, ...
+   -r_jerk];
+
+%% Debug
+if mod(this.c,5) == 0 || this.c == 1
+    fprintf(['[RW DBG V2] step=%d | progress=% .4f | goal=% .4f | success=% .4f | ' ...
+             'divergence=% .4f | effort=% .4f | jerk=% .4f | total=% .4f\n'], ...
+             this.c, r_progress, r_goal, r_success, -r_diverge, -r_effort, -r_jerk, reward);
+end
+
+prevMeanDist = e_t;
+previousAction = action;
+
+end
 
 
 

@@ -83,7 +83,7 @@ if ~params.run_training
         );
 else
     params.RLtrainingOptions = rlTrainingOptions(...
-        'MaxEpisodes',3000,... % when too many episodes it makes slower creating episode =20000000
+        'MaxEpisodes',300,... % when too many episodes it makes slower creating episode =20000000
         'MaxStepsPerEpisode', params.maxNumberStepsInEpisodes,...
         'StopTrainingCriteria',"AverageReward",...
         'StopTrainingValue', 600,... % new rewards
@@ -145,8 +145,8 @@ if params.usePrerecorded
 
     % params.dataset = "jona_2022"; % it can be a single name
     % everybody together
-     params.dataset = {"BLANCA", "CECILIA", "DENIS", "EMILIA", "GABI", "GABRIEL", "IVANNA", "JOE", "JONATHAN", "KHAROL", "MATEO", "SANDRA"}; % or a cell of names.
-    % params.dataset = "DENIS";
+    % params.dataset = {"BLANCA", "CECILIA", "DENIS", "EMILIA", "GABI", "GABRIEL", "IVANNA", "JOE", "JONATHAN", "KHAROL", "MATEO", "SANDRA"}; % or a cell of names.
+     params.dataset = "DENIS";
     % params.dataset = "GABRIEL";
     % params.dataset = "MATEO";
     % params.dataset = "EMILIA";
@@ -179,7 +179,7 @@ params.reward_function = @(env, action, observation) ...
 params.unifyActions = false;
 
 % params.speeds = [170, 170, 255, 170]; % little, idx, thumb, mid
-params.speeds = 100* [1, 1, 1, 1]; % little, idx, thumb, mid
+params.speeds = 100* [1, 1, 1, 1]; % little, idx, thumb, mid %params.speeds = 100* [1, 1, 1, 1];
 
 % clipping
 % when true, the reward function can limit, modify or clip the action.
@@ -225,7 +225,7 @@ params.flexJoined_scale = @(x) x./[4092 2046 1023 2046];
 %%Para
 % Parameters that affect getObservationInfo()
 params.numEMGFeatures = 40;
-params.stateLength = 44; % num state features: EMG features + motors
+params.stateLength = 48; % 40 EMG + 4 q + 4 err %params.stateLength = 44; % num state features: EMG features + motors
 
 % -- Cinematic info: Encoder
 % max unreachable limits, uses the limit of the ring|little
