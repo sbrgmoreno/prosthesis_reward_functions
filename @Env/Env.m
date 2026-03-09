@@ -202,8 +202,15 @@ classdef Env < rl.env.MATLABEnvironment
 
             % Initialize Action settings
             % ActionInfo = Env.defineActionInfo();
-            ActionInfo = Env.defineActionDiscreteInfo();
+            
+            
+            %ActionInfo = Env.defineActionDiscreteInfo();
 
+            %%%%%% ^  %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+            %%%%%% |  %%%%%% ACCIONES CONTINUAS 4 ACCIONES [-1, 1] %%%%%%%%%
+            %%%%%% |  %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+            ActionInfo = Env.defineActionInfo();
+            %%%%%%%%%%%%%%%%%% 1 LINEA COMENTADA %%%%%%%%%%%%%%%%%%%%%%%%%%
             % The following line implements built-in functions of RL env
             this = this@rl.env.MATLABEnvironment(...
                 ObservationInfo, ActionInfo);
