@@ -47,6 +47,8 @@ switch agent_id
         agent = agent_00_oldy_dueling(observationInfo, actionInfo);
    case "00_rainbow_lite_dueling"
         agent = agent_00_rainbow_lite_dueling(observationInfo, actionInfo);
+    case "00_ppo_continuos"
+        agent= agent_ppo_continuous(observationInfo, actionInfo);
 
     otherwise
         disp(param_name)

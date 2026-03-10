@@ -1,29 +1,65 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%% 81 acciones %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 function actionInfo = defineActionDiscreteInfo()
-% defineActionDiscreteInfo() defines a reduced discrete action space:
-% one motor moves per step, or no movement.
 
 if configurables('unifyActions')
     actionInfo = rlFiniteSetSpec([-1 0 1]);
 else
-    actions = { ...
-        [ 1  0  0  0], ...  % motor 1 open
-        [-1  0  0  0], ...  % motor 1 close
-        [ 0  1  0  0], ...  % motor 2 open
-        [ 0 -1  0  0], ...  % motor 2 close
-        [ 0  0  1  0], ...  % motor 3 open
-        [ 0  0 -1  0], ...  % motor 3 close
-        [ 0  0  0  1], ...  % motor 4 open
-        [ 0  0  0 -1], ...  % motor 4 close
-        [ 0  0  0  0]  ...  % stop
-    };
-
-    actionInfo = rlFiniteSetSpec(actions);
+    vals = [-1 0 1];
+    actions = [];
+    for a = vals
+        for b = vals
+            for c = vals
+                for d = vals
+                    actions = [actions; a b c d];
+                end
+            end
+        end
+    end
+    actionInfo = rlFiniteSetSpec(num2cell(actions,2)');
 end
 
 actionInfo.Name = 'prosthesis_action_space';
 actionInfo.Description = ...
-    'Reduced action space: one motor per step or stop.';
+    'Discrete action space with 81 combinations for 4 motors.';
 end
+
+
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%% 9 acciones %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% function actionInfo = defineActionDiscreteInfo()
+% % defineActionDiscreteInfo() defines a reduced discrete action space:
+% % one motor moves per step, or no movement.
+% 
+% if configurables('unifyActions')
+%     actionInfo = rlFiniteSetSpec([-1 0 1]);
+% else
+%     actions = { ...
+%         [ 1  0  0  0], ...  % motor 1 open
+%         [-1  0  0  0], ...  % motor 1 close
+%         [ 0  1  0  0], ...  % motor 2 open
+%         [ 0 -1  0  0], ...  % motor 2 close
+%         [ 0  0  1  0], ...  % motor 3 open
+%         [ 0  0 -1  0], ...  % motor 3 close
+%         [ 0  0  0  1], ...  % motor 4 open
+%         [ 0  0  0 -1], ...  % motor 4 close
+%         [ 0  0  0  0]  ...  % stop
+%     };
+% 
+%     actionInfo = rlFiniteSetSpec(actions);
+% end
+% 
+% actionInfo.Name = 'prosthesis_action_space';
+% actionInfo.Description = ...
+%     'Reduced action space: one motor per step or stop.';
+% end
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
 
 
 % function actionInfo = defineActionDiscreteInfo()

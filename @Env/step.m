@@ -22,13 +22,30 @@ function [observation, reward, isDone, loggedSignals] = step(this, action)
     if ~isnumeric(action)
         error('action must be numeric');
     end
-    action = double(action);
+    
+    action = double(action); %ANTES DESCOMENTADO
+    %   ^  %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    %   |  %% ACCION PARA ESTADO DE ACCIONES DISCRETAS %%%%%%%%%%%%%%%%%%%
+    %%  |  %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    %action = double(action(:))';   % force 1x4 row vector
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    
+    % %--------------------- ANTES DESCOMENTADO ------------------------------
+    % % Ensure action has correct dimensions
+    % expectedActionSize = size(this.actionLog, 2);
+    % if size(action,2) ~= expectedActionSize
+    %     error('The action size does not match the actionLog size');
+    % end
+    % %----------------------------------------------------------------------
 
-    % Ensure action has correct dimensions
-    expectedActionSize = size(this.actionLog, 2);
+    %%   ^  %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    %%   |  %%%%%% PARA ACCIONES CONTINUAS %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    %%%  |  %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    expectedActionSize = 4;
     if size(action,2) ~= expectedActionSize
-        error('The action size does not match the actionLog size');
+        error('The action size does not match the expected number of motors');
     end
+    %%%%%%%%%%%%%%%%% 4 LINEAS DESCOMENTADAS %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -61,7 +78,49 @@ function [observation, reward, isDone, loggedSignals] = step(this, action)
     this.actionSatLog(this.c,:) = actionSat;
 
     % Acción aplicada al controlador (con speeds)
-    actionApplied = actionSat .* this.speeds;
+    %-----------------ACCIONES DISCRETAS--------------------------------
+    actionApplied = actionSat .* this.speeds; %PARA ACCIONES DISCRETAS
+    %-------------------------------------------------------------------
+
+    % %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    % % ACCIONES CONTINUAS CON BUCKETS PROPIOS QUE TIENE prosthesis_simulator.m %%%%%%%
+    % %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    % 
+    % % ==========================================
+    % % Map PPO continuous actions to simulator-supported PWM buckets
+    % % ==========================================
+    % simBuckets = [0, 63, 95, 127, 159, 191, 223, 255];  % exact simulator buckets
+    % 
+    % actionQuant = zeros(size(actionSat));
+    % actionApplied = zeros(size(actionSat));
+    % 
+    % for i = 1:numel(actionSat)
+    %     a = actionSat(i);
+    % 
+    %     % deadband around zero
+    %     if abs(a) < 0.10
+    %         actionQuant(i) = 0;
+    %         actionApplied(i) = 0;
+    %     else
+    %         sgn = sign(a);
+    % 
+    %         % map |a| in [0,1] to one of the nonzero valid buckets
+    %         targetMag = abs(a) * 255;
+    %         nonzeroBuckets = simBuckets(2:end);
+    % 
+    %         [~, idx] = min(abs(nonzeroBuckets - targetMag));
+    %         pwm = nonzeroBuckets(idx);
+    % 
+    %         actionApplied(i) = sgn * pwm;
+    %         actionQuant(i) = actionApplied(i) / 255;   % normalized only for logging
+    %     end
+    % end
+    % %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+
+
+
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

@@ -204,12 +204,12 @@ classdef Env < rl.env.MATLABEnvironment
             % ActionInfo = Env.defineActionInfo();
             
             
-            %ActionInfo = Env.defineActionDiscreteInfo();
+            ActionInfo = Env.defineActionDiscreteInfo();
 
             %%%%%% ^  %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
             %%%%%% |  %%%%%% ACCIONES CONTINUAS 4 ACCIONES [-1, 1] %%%%%%%%%
             %%%%%% |  %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-            ActionInfo = Env.defineActionInfo();
+            %ActionInfo = Env.defineActionInfo();
             %%%%%%%%%%%%%%%%%% 1 LINEA COMENTADA %%%%%%%%%%%%%%%%%%%%%%%%%%
             % The following line implements built-in functions of RL env
             this = this@rl.env.MATLABEnvironment(...
@@ -388,7 +388,8 @@ classdef Env < rl.env.MATLABEnvironment
         actionInfo = defineActionDiscreteInfo()
 
         %--- continous version
-        % actionInfo = defineActionInfo()
+        actionInfo = defineActionInfo() %antes comentado
+
     end
 end
 % More properties at: AbortSet, Abstract, Access, Dependent, GetAccess, ...
