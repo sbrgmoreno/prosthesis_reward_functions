@@ -1,4 +1,4 @@
-%function [reward, rewardVector, action] = legacy_distanceRewarding(this, action)
+function [reward, rewardVector, action] = legacy_distanceRewarding(this, action)
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%      VERSION v0     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -2315,98 +2315,145 @@
 
 
 
-% % % %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% % % %%%%%%%%%%%%%%%% VERSION 13  (Wen 2019, Borkowska 2022, etc.) optimizado %%%%%%%%%%%%%%
-% % % %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-function [reward, rewardVector, actionOut] = legacy_distanceRewarding(this, action, ~)
-
-persistent prevMeanDist previousAction successCounter
-
-actionOut = action;
-
-if isempty(prevMeanDist), prevMeanDist = NaN; end
-if isempty(previousAction), previousAction = zeros(size(action)); end
-if isempty(successCounter), successCounter = 0; end
-
-if this.c <= 1
-    prevMeanDist = NaN;
-    previousAction = zeros(size(action));
-    successCounter = 0;
-end
-
-%% Variables reales del entorno
-q     = this.adjustEnc(end,:);
-q_ref = this.flexConverted(end,:);
-
-e = q - q_ref;
-e_t = mean(abs(e));
-
-if isnan(prevMeanDist)
-    delta_e = 0;
-else
-    delta_e = prevMeanDist - e_t;
-end
-
-%% Hiperparámetros reescalados
-Kp = 40;      % progreso fuerte
-Kg = 0.25;    % castigo por distancia mucho menor
-Ke = 0.02;    % menor castigo por esfuerzo
-Kj = 0.02;    % menor castigo por jerk
-Kd = 0.0;     % divergencia desactivada temporalmente
-
-successThreshold = 0.10;
-holdSteps = 3;
-successBonus = 30;
-holdBonus = 15;
-
-%% Términos
-r_progress = Kp * delta_e;
-r_goal     = -Kg * e_t;
-
-r_diverge = 0;
-r_effort  = Ke * mean(abs(action));
-r_jerk    = Kj * mean(abs(action - previousAction));
-
-if all(abs(e) < successThreshold)
-    successCounter = successCounter + 1;
-    r_success = successBonus;
-else
-    successCounter = 0;
-    r_success = 0;
-end
-
-if successCounter >= holdSteps
-    r_success = r_success + holdBonus;
-end
-
-%% Reward total
-reward = r_progress + r_goal + r_success - r_diverge - r_effort - r_jerk;
-reward = max(min(reward, 25), -25);
-
-%% Vector informativo
-rewardVector = [ ...
-    r_progress, ...
-    r_goal, ...
-    r_success, ...
-   -r_diverge, ...
-   -r_effort, ...
-   -r_jerk];
-
-%% Debug
-if mod(this.c,5) == 0 || this.c == 1
-    fprintf(['[RW DBG V2] step=%d | progress=% .4f | goal=% .4f | success=% .4f | ' ...
-             'divergence=% .4f | effort=% .4f | jerk=% .4f | total=% .4f\n'], ...
-             this.c, r_progress, r_goal, r_success, -r_diverge, -r_effort, -r_jerk, reward);
-end
-
-prevMeanDist = e_t;
-previousAction = action;
-
-end
-
-
+% % % % %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% % % % %%%%%%%%%%%%%%%% VERSION 13  (Wen 2019, Borkowska 2022, etc.) optimizado %%%%%%%%%%%%%%
+% % % % %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% function [reward, rewardVector, actionOut] = legacy_distanceRewarding(this, action, ~)
+% 
+% persistent prevMeanDist previousAction successCounter
+% 
+% actionOut = action;
+% 
+% if isempty(prevMeanDist), prevMeanDist = NaN; end
+% if isempty(previousAction), previousAction = zeros(size(action)); end
+% if isempty(successCounter), successCounter = 0; end
+% 
+% if this.c <= 1
+%     prevMeanDist = NaN;
+%     previousAction = zeros(size(action));
+%     successCounter = 0;
+% end
+% 
+% %% Variables reales del entorno
+% q     = this.adjustEnc(end,:);
+% q_ref = this.flexConverted(end,:);
+% 
+% e = q - q_ref;
+% e_t = mean(abs(e));
+% 
+% if isnan(prevMeanDist)
+%     delta_e = 0;
+% else
+%     delta_e = prevMeanDist - e_t;
+% end
+% 
+% %% Hiperparámetros reescalados
+% Kp = 40;      % progreso fuerte
+% Kg = 0.25;    % castigo por distancia mucho menor
+% Ke = 0.02;    % menor castigo por esfuerzo
+% Kj = 0.02;    % menor castigo por jerk
+% Kd = 0.0;     % divergencia desactivada temporalmente
+% 
+% successThreshold = 0.10;
+% holdSteps = 3;
+% successBonus = 30;
+% holdBonus = 15;
+% 
+% %% Términos
+% r_progress = Kp * delta_e;
+% r_goal     = -Kg * e_t;
+% 
+% r_diverge = 0;
+% r_effort  = Ke * mean(abs(action));
+% r_jerk    = Kj * mean(abs(action - previousAction));
+% 
+% if all(abs(e) < successThreshold)
+%     successCounter = successCounter + 1;
+%     r_success = successBonus;
+% else
+%     successCounter = 0;
+%     r_success = 0;
+% end
+% 
+% if successCounter >= holdSteps
+%     r_success = r_success + holdBonus;
+% end
+% 
+% %% Reward total
+% reward = r_progress + r_goal + r_success - r_diverge - r_effort - r_jerk;
+% reward = max(min(reward, 25), -25);
+% 
+% %% Vector informativo
+% rewardVector = [ ...
+%     r_progress, ...
+%     r_goal, ...
+%     r_success, ...
+%    -r_diverge, ...
+%    -r_effort, ...
+%    -r_jerk];
+% 
+% %% Debug
+% if mod(this.c,5) == 0 || this.c == 1
+%     fprintf(['[RW DBG V2] step=%d | progress=% .4f | goal=% .4f | success=% .4f | ' ...
+%              'divergence=% .4f | effort=% .4f | jerk=% .4f | total=% .4f\n'], ...
+%              this.c, r_progress, r_goal, r_success, -r_diverge, -r_effort, -r_jerk, reward);
+% end
+% 
+% prevMeanDist = e_t;
+% previousAction = action;
+% 
+% end
 
 
+
+% % % % %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% % % % %%%%%%%%%%%%%%%% VERSION 14 REWARD SIMPLE ERR_PREV - ERR_ACT %%%%%%%%%%%%%%%%%%%%%%%%%%
+% % % % %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    %function [reward, rewardVector, action] = legacy_distanceRewarding(this, action)
+
+    % ============================================================
+    % SIMPLE PROGRESS REWARD (diagnostic version)
+    % reward = previous error norm - current error norm
+    % Positive reward if error decreases
+    % ============================================================
+    
+    persistent prevErrNorm
+    
+    % -------- reset por episodio --------
+    if this.c == 1
+        prevErrNorm = NaN;
+    end
+    
+    % -------- estado actual --------
+    q     = this.adjustEnc(end,:);
+    q_ref = this.flexConverted(end,:);
+    
+    err = q - q_ref;
+    
+    currErrNorm = norm(err);
+    
+    % -------- reward --------
+    if isnan(prevErrNorm)
+        reward = 0;
+    else
+        reward = prevErrNorm - currErrNorm;
+    end
+    
+    % guardar error para siguiente step
+    prevErrNorm = currErrNorm;
+    
+    % -------- rewardVector compatible con pipeline --------
+    rewardVector = reward * ones(1,length(action));
+    
+    % -------- debug opcional --------
+    if mod(this.c,5) == 1 || this.c == 1
+        fprintf('[RW SIMPLE] step=%d | errNorm=%.4f | reward=%.4f\n', ...
+            this.c, currErrNorm, reward);
+    end
+    
+    end
+
+% % % % %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 
 

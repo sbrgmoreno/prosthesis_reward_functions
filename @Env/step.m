@@ -5,9 +5,10 @@ function [observation, reward, isDone, loggedSignals] = step(this, action)
 
     % ---- RESET por episodio: inicializar logs por step
     if this.c == 1
-        this.meanDistLog = NaN(1, this.maxNumberStepsInEpisodes);
-        this.mseLog      = NaN(1, this.maxNumberStepsInEpisodes);
-        this.successLog  = NaN(1, this.maxNumberStepsInEpisodes);
+        this.meanDistLog     = NaN(1, this.maxNumberStepsInEpisodes);
+        this.mseLog          = NaN(1, this.maxNumberStepsInEpisodes);
+        this.successLog      = NaN(1, this.maxNumberStepsInEpisodes);
+        this.nearSuccessLog  = NaN(1, this.maxNumberStepsInEpisodes);
     end
 
     % Unify actions if needed (single action -> 4 motors)
@@ -22,50 +23,28 @@ function [observation, reward, isDone, loggedSignals] = step(this, action)
     if ~isnumeric(action)
         error('action must be numeric');
     end
-    
-    action = double(action); %ANTES DESCOMENTADO
-    %   ^  %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    %   |  %% ACCION PARA ESTADO DE ACCIONES DISCRETAS %%%%%%%%%%%%%%%%%%%
-    %%  |  %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    %action = double(action(:))';   % force 1x4 row vector
-    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    
-    % %--------------------- ANTES DESCOMENTADO ------------------------------
-    % % Ensure action has correct dimensions
-    % expectedActionSize = size(this.actionLog, 2);
-    % if size(action,2) ~= expectedActionSize
-    %     error('The action size does not match the actionLog size');
-    % end
-    % %----------------------------------------------------------------------
 
-    %%   ^  %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    %%   |  %%%%%% PARA ACCIONES CONTINUAS %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    %%%  |  %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    action = double(action);
+
+    % Expected size for 4 motors
     expectedActionSize = 4;
     if size(action,2) ~= expectedActionSize
         error('The action size does not match the expected number of motors');
     end
-    %%%%%%%%%%%%%%%%% 4 LINEAS DESCOMENTADAS %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     % ===== DEBUG: fuerza acción para test de controlabilidad =====
-    %action = ones(1,4);   % prueba también con -ones(1,4)
     if isprop(this,'forceActionDebug') && this.forceActionDebug
         action = this.forcedActionValue;
     end
-    % ============================================================
-    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-    % Log raw action (discrete)
+    % Log raw action
     this.actionLog(this.c,:) = action;
     if this.verbose
         fprintf('  actions=[%2d %2d %2d %2d]\n', action);
     end
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    % (1) SATURACIÓN/CLIPPING DE ACCIÓN (SIN LLAMAR REWARD AQUÍ)
+    % (1) SATURACIÓN / CLIPPING DE ACCIÓN
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     actionSat = action;
 
@@ -78,56 +57,10 @@ function [observation, reward, isDone, loggedSignals] = step(this, action)
     this.actionSatLog(this.c,:) = actionSat;
 
     % Acción aplicada al controlador (con speeds)
-    %-----------------ACCIONES DISCRETAS--------------------------------
-    actionApplied = actionSat .* this.speeds; %PARA ACCIONES DISCRETAS
-    %-------------------------------------------------------------------
+    actionApplied = actionSat .* this.speeds;
 
-    % %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    % % ACCIONES CONTINUAS CON BUCKETS PROPIOS QUE TIENE prosthesis_simulator.m %%%%%%%
-    % %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    % 
-    % % ==========================================
-    % % Map PPO continuous actions to simulator-supported PWM buckets
-    % % ==========================================
-    % simBuckets = [0, 63, 95, 127, 159, 191, 223, 255];  % exact simulator buckets
-    % 
-    % actionQuant = zeros(size(actionSat));
-    % actionApplied = zeros(size(actionSat));
-    % 
-    % for i = 1:numel(actionSat)
-    %     a = actionSat(i);
-    % 
-    %     % deadband around zero
-    %     if abs(a) < 0.10
-    %         actionQuant(i) = 0;
-    %         actionApplied(i) = 0;
-    %     else
-    %         sgn = sign(a);
-    % 
-    %         % map |a| in [0,1] to one of the nonzero valid buckets
-    %         targetMag = abs(a) * 255;
-    %         nonzeroBuckets = simBuckets(2:end);
-    % 
-    %         [~, idx] = min(abs(nonzeroBuckets - targetMag));
-    %         pwm = nonzeroBuckets(idx);
-    % 
-    %         actionApplied(i) = sgn * pwm;
-    %         actionQuant(i) = actionApplied(i) / 255;   % normalized only for logging
-    %     end
-    % end
-    % %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
-
-
-
-
-
-    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     fprintf("[DBG] actionSat=%s | speeds=%s | actionApplied=%s\n", ...
-    mat2str(actionSat), mat2str(this.speeds), mat2str(actionApplied));
-    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        mat2str(actionSat), mat2str(this.speeds), mat2str(actionApplied));
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     % (2) APLICAR ACCIÓN
@@ -137,7 +70,6 @@ function [observation, reward, isDone, loggedSignals] = step(this, action)
         actionApplied(1), actionApplied(2), actionApplied(3), actionApplied(4));
     assert(completed, 'ERROR during sending speed to controller')
 
-    % waiting data, applying action.
     while this.periodTic.toc() < this.period
         drawnow
     end
@@ -167,11 +99,8 @@ function [observation, reward, isDone, loggedSignals] = step(this, action)
     motorData = this.prosthesis.read();
     this.encoderLog{this.c} = motorData;
 
-    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    encRaw = motorData(end,:);   % 1x4 encoder crudo (última muestra)
-    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    % Encoder crudo para diagnóstico
+    encRaw = motorData(end,:);
 
     % Fallbacks si llegan vacíos
     if isempty(emg)
@@ -195,7 +124,7 @@ function [observation, reward, isDone, loggedSignals] = step(this, action)
         this.flexData = flexData;
     end
 
-    % --- end step (reset timers)
+    % Reset timers
     this.periodTic.tic();
     if this.wait_in_step
         this.period_realTic = tic;
@@ -207,52 +136,75 @@ function [observation, reward, isDone, loggedSignals] = step(this, action)
         size(emg, 1), size(motorData, 1), size(flexData, 1)));
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    % (4) ACTUALIZAR ESTADO Y VARIABLES AUXILIARES (q y q_ref listos)
+    % (4) ACTUALIZAR ESTADO Y VARIABLES AUXILIARES (q y q_ref consistentes)
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    %--------------------- ANTESDESCOMENTADO---------------------------------------
+    % this.flexConverted = this.flexJoined_scaler(reduceFlexDimension(this.flexData));
+    % this.adjustEnc     = this.flexJoined_scaler(encoder2Flex(this.motorData));
+    % 
+    % % clipping seguro
+    % this.flexConverted = max(0, min(1, this.flexConverted));
+    % this.adjustEnc     = max(0, min(1, this.adjustEnc));
+    %---------------------------------------------------------------------
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    this.flexConverted = this.flexJoined_scaler(reduceFlexDimension(this.flexData));
+    this.flexConverted = max(0, min(1, this.flexConverted));
+
+    % ===== q desde encoder crudo normalizado por motor =====
+    encRawMat = this.motorData;          % Nx4
+    encRawLast = encRawMat(end,:);
+
+    % Ajuste provisional con rangos realistas observados
+    encMin = [0 0 0 -10];
+    encMax = [390 340 330 340];
+
+    adjEnc = (encRawMat - encMin) ./ (encMax - encMin);
+    adjEnc = max(0, min(1, adjEnc));
+
+    this.adjustEnc = adjEnc;
+
+    % ===== DEBUG de transformación de encoder =====
+    if this.verbose && (this.c == 1 || mod(this.c,5) == 0)
+        fprintf('\n[ENC DEBUG] step=%d\n', this.c);
+        fprintf('encRaw(end,:)    = %s\n', mat2str(encRawLast,4));
+        fprintf('adjustEnc(end,:) = %s\n', mat2str(this.adjustEnc(end,:),4));
+        fprintf('flexRef(end,:)   = %s\n\n', mat2str(this.flexConverted(end,:),4));
+    end
+    %%%%%%%%%%%%%%%%% 4 LINEAS COMENTADAS %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
     this.State = this.calculateState(emg, motorData);
     observation = this.State;
 
-    this.flexConverted = this.flexJoined_scaler(reduceFlexDimension(this.flexData));
-    % this.adjustEnc     = this.flexJoined_scaler(encoder2Flex(this.motorData));%*******||| ANTES DESCOMENTADO
-
-    %%%%%%%%%%%%%%%%%%%%%%%%%    ^     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    %%%%%%%%%%%%%%%%%%%%%%%%%    |     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    %%%%%%%%%%%%%%%%%%%%%%%%%    |     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    enc = this.motorData(end,:);
-
-    % Normalización temporal simple de encoder crudo
-    encMin = [0 0 0 0];
-    encMax = [5000 5000 5000 5000];   % ajusta si hace falta según tus rangos reales
-    
-    this.adjustEnc = max(0, min(1, (enc - encMin) ./ (encMax - encMin)));
-    %%%%%%%%%%%%%%%%%%%%%% 1 LINEA COMENTADA %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    % (5) REWARD (UNA SOLA VEZ, DESPUÉS DE TENER q y q_ref)  ✅ V10 OK
+    % (5) REWARD
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     reward = 0;
     rewardVector = zeros(1, expectedActionSize);
 
     try
-        [reward, rewardVector, ~] = this.reward_function(this, actionSat, []);
+        [reward, rewardVector, ~] = this.reward_function(this, actionSat);
     catch
-        [reward, rewardVector] = this.reward_function(this, actionSat, []);
+        try
+            [reward, rewardVector] = this.reward_function(this, actionSat);
+        catch
+            [reward, rewardVector, ~] = this.reward_function(this, actionSat, []);
+        end
     end
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    % (6) MÉTRICAS POR STEP (siempre aquí, NO dentro del reward)
+    % (6) MÉTRICAS POR STEP
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     q     = this.adjustEnc(end,:);
     q_ref = this.flexConverted(end,:);
-    e = q - q_ref;
-    
-    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    e     = q - q_ref;
+
     % =========================
-    % Sensitivity logging (C)
+    % Sensitivity logging
     % =========================
     t = this.c;
-    
-    % Init episode logs
+
     if t == 1
         this.qLog          = NaN(this.maxNumberStepsInEpisodes, 4);
         this.qRefLog       = NaN(this.maxNumberStepsInEpisodes, 4);
@@ -263,96 +215,55 @@ function [observation, reward, isDone, loggedSignals] = step(this, action)
         this.effectNormLog = NaN(this.maxNumberStepsInEpisodes, 1);
         this.errNormLog    = NaN(this.maxNumberStepsInEpisodes, 1);
         this.dErrLog       = NaN(this.maxNumberStepsInEpisodes, 1);
-        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        % ============== NUEVO: logs de encoder crudo ================
+
         this.encRawLog        = NaN(this.maxNumberStepsInEpisodes, 4);
         this.encEffectNormLog = NaN(this.maxNumberStepsInEpisodes, 1);
-        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     end
-    
-    % Log q and q_ref
+
     this.qLog(t,:)    = q;
     this.qRefLog(t,:) = q_ref;
-    
-    % Log actions
-    this.aRawLog(t,:)     = actionSat;        % (-1,0,1)
-    this.aAppliedLog(t,:) = actionApplied;    % after speeds
-    
-    % dq = q(t)-q(t-1)
+
+    this.aRawLog(t,:)     = actionSat;
+    this.aAppliedLog(t,:) = actionApplied;
+
     if t == 1
         dq = zeros(1,4);
     else
         dq = q - this.qLog(t-1,:);
     end
     this.dqLog(t,:) = dq;
-    
-    % effect size
     this.effectNormLog(t) = norm(dq);
 
+    this.encRawLog(t,:) = encRaw;
+    if t == 1
+        dEncRaw = zeros(1,4);
+    else
+        dEncRaw = encRaw - this.encRawLog(t-1,:);
+    end
+    this.encEffectNormLog(t) = norm(dEncRaw);
 
-    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    this.errNormLog(t) = norm(e);
 
-            % ===== NUEVO: efecto en encoder crudo =====
-        this.encRawLog(t,:) = encRaw;
-        
-        if t == 1
-            dEncRaw = zeros(1,4);
-        else
-            dEncRaw = encRaw - this.encRawLog(t-1,:);
-        end
-        
-        this.encEffectNormLog(t) = norm(dEncRaw);
-    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
-    
-    % error norm
-    err = q - q_ref;
-    this.errNormLog(t) = norm(err);
-    
-    % dErr = err(t-1)-err(t) (positive = improvement)
     if t == 1
         this.dErrLog(t) = 0;
     else
         this.dErrLog(t) = this.errNormLog(t-1) - this.errNormLog(t);
     end
-    
-    % Direction agreement: action pushes toward reducing error
-    % If err(i)>0 => want negative dq (decrease q), so action should be -1
-    % If err(i)<0 => want positive dq, so action should be +1
 
-
-
-    % desiredDir = -sign(err);                % direction that would reduce error
-    % this.dirAgreeLog(t,:) = (sign(actionSat) == desiredDir) & (actionSat ~= 0);
-    
-    %%%%%%%%%%%%%%%%%%    ^     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    %%%%%%%%%%%%%%%%%%    |     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    %%%%%%%%%%%%%%%%%%    |     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    % Dirección real observada en q
-    obsDir = sign(dq);             % dq = q(t)-q(t-1)
-    
-    % Dirección deseada para reducir error:
-    % si err>0 queremos dq<0; si err<0 queremos dq>0
-    desiredDQdir = -sign(err);
-    
-    % Agreement real: el dq observado va en la dirección deseada
+    obsDir = sign(dq);
+    desiredDQdir = -sign(e);
     this.dirAgreeLog(t,:) = (obsDir == desiredDQdir) & (obsDir ~= 0);
-    %%%%%%%%%%%%%%% 2 LINEAS COMENTADAS %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-
-    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
-
-
+    % Métricas escalares
     this.meanDistStep = mean(abs(e));
     this.mseStep      = mean(e.^2);
 
-    thrSuccess = 0.15; %0.03;
-    this.successStep  = all(abs(e) < thrSuccess);
+    thrSuccess = 0.20;
+    thrNear    = 0.25;
+
+    absErr = abs(e);
+    this.successStep     = all(absErr < thrSuccess);
+    this.nearSuccessStep = all(absErr < thrNear);
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     % (7) LOGS
@@ -366,6 +277,7 @@ function [observation, reward, isDone, loggedSignals] = step(this, action)
     this.meanDistLog(this.c) = this.meanDistStep;
     this.mseLog(this.c)      = this.mseStep;
     this.successLog(this.c)  = this.successStep;
+    this.nearSuccessLog(this.c) = this.nearSuccessStep;
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     % (8) TERMINAL CONDITION
@@ -378,28 +290,49 @@ function [observation, reward, isDone, loggedSignals] = step(this, action)
         this.successRateEpisode(this.episodeCount) = mean(this.successLog(1:this.c), 'omitnan');
         this.mseEpisode(this.episodeCount) = mean(this.mseLog(1:this.c), 'omitnan');
 
-        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        % ===== métricas finales del episodio =====
+        finalErr = abs(e);
+
+        this.finalAbsErrEpisode = finalErr;
+        this.finalMeanAbsErr    = mean(finalErr);
+        this.finalMaxAbsErr     = max(finalErr);
+        this.nearSuccessEpisode = any(this.nearSuccessLog(1:this.c) == 1);
+
+        % ===== resumen de acciones usadas =====
+        A_ep = this.aRawLog(1:this.c,:);
+        [Auniq, ~, ic] = unique(A_ep, 'rows');
+        counts = accumarray(ic, 1);
+
+        fprintf("\n[EP DIAG] final abs error per motor = %s\n", mat2str(finalErr,4));
+        fprintf("[EP DIAG] final mean(abs(err)) = %.6f | final max(abs(err)) = %.6f\n", ...
+            this.finalMeanAbsErr, this.finalMaxAbsErr);
+        fprintf("[EP DIAG] strict success ever = %d | near success ever = %d\n", ...
+            any(this.successLog(1:this.c) == 1), this.nearSuccessEpisode);
+
+        fprintf("[EP DIAG] unique actions used = %d\n", size(Auniq,1));
+        for k = 1:size(Auniq,1)
+            fprintf("  action %s -> %d times\n", mat2str(Auniq(k,:)), counts(k));
+        end
+
+        %-----------------------------------------------------------------
+        encEp = this.encRawLog(1:this.c,:);
+        encMinEp = min(encEp, [], 1);
+        encMaxEp = max(encEp, [], 1);
+        
+        fprintf("[ENC RANGE] min per motor = %s\n", mat2str(encMinEp,4));
+        fprintf("[ENC RANGE] max per motor = %s\n", mat2str(encMaxEp,4));
+        %-----------------------------------------------------------------
+        %
 
         fprintf("\n[ENC RAW] mean ||dEnc|| = %.6f | dead-zone raw = %.2f%%\n", ...
-        mean(this.encEffectNormLog(1:this.c), 'omitnan'), ...
-        100*mean(this.encEffectNormLog(1:this.c) < 1e-9, 'omitnan'));
-        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
-
-
+            mean(this.encEffectNormLog(1:this.c), 'omitnan'), ...
+            100*mean(this.encEffectNormLog(1:this.c) < 1e-9, 'omitnan'));
     end
 
     if isDone && this.flagSaveTraining
-        %this.saveEpisode(); %antes descomentado 
-        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         if isprop(this,'saveEpisodes') && this.saveEpisodes
             this.saveEpisode();
         end
-        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     end
 
     notifyEnvUpdated(this);

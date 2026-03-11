@@ -143,6 +143,18 @@ classdef Env < rl.env.MATLABEnvironment
         mseEpisode = [];         % [numEpisodes x 1]
         %%%%%%%%%%%%%%%%%%%%%%%%----------------------%%%%%%%%%%%%%%%%%%%%%%%%%
         %%%%%%%%%%%%%%%%%%%%%%%%----------------------%%%%%%%%%%%%%%%%%%%%%%%%%
+        
+        %%%%%%%%%%%%%%%%%%%%%%%%----------------------%%%%%%%%%%%%%%%%%%%%%%%%%
+                         %      METRICAS DE STEP    %
+        %%%%%%%%%%%%%%%%%%%%%%%%----------------------%%%%%%%%%%%%%%%%%%%%%%%%%
+        finalAbsErrEpisode = [];
+        finalMeanAbsErr = NaN;
+        finalMaxAbsErr = NaN;
+        nearSuccessEpisode = NaN;
+        nearSuccessLog = [];
+        %%%%%%%%%%%%%%%%%%%%%%%%----------------------%%%%%%%%%%%%%%%%%%%%%%%%%
+        %%%%%%%%%%%%%%%%%%%%%%%%----------------------%%%%%%%%%%%%%%%%%%%%%%%%%
+        
 
         %%%%%%%%%%%%%%%%%%%%%%%%----------------------%%%%%%%%%%%%%%%%%%%%%%%%%
                          %      METRICAS DE SENSIBILIDAD     %
@@ -173,6 +185,7 @@ classdef Env < rl.env.MATLABEnvironment
         meanDistStep = NaN;    % escalar por step
         mseStep      = NaN;    % escalar por step
         successStep  = false;  % bool por step
+        nearSuccessStep = false;
         
 
         forceActionDebug = false;          % OFF por defecto
