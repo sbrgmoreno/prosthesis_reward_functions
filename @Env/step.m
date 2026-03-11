@@ -259,7 +259,7 @@ function [observation, reward, isDone, loggedSignals] = step(this, action)
     this.mseStep      = mean(e.^2);
 
     thrSuccess = 0.20;
-    thrNear    = 0.25;
+    thrNear    = 0.30;
 
     absErr = abs(e);
     this.successStep     = all(absErr < thrSuccess);
@@ -323,6 +323,16 @@ function [observation, reward, isDone, loggedSignals] = step(this, action)
         fprintf("[ENC RANGE] max per motor = %s\n", mat2str(encMaxEp,4));
         %-----------------------------------------------------------------
         %
+
+        %-----------------------------------------------------------------        
+        % ===== NUEVO DIAGNOSTICO POR MOTOR =====
+        dEncPerMotor = diff(this.encRawLog(1:this.c,:),1,1);
+        meanAbsDEncPerMotor = mean(abs(dEncPerMotor),1,'omitnan');
+        
+        fprintf('[ENC MOTOR DIAG] mean abs dEnc per motor = %s\n', ...
+            mat2str(meanAbsDEncPerMotor,4));
+        %-----------------------------------------------------------------
+
 
         fprintf("\n[ENC RAW] mean ||dEnc|| = %.6f | dead-zone raw = %.2f%%\n", ...
             mean(this.encEffectNormLog(1:this.c), 'omitnan'), ...

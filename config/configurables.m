@@ -83,7 +83,7 @@ if ~params.run_training
         );
 else
     params.RLtrainingOptions = rlTrainingOptions(...
-        'MaxEpisodes',300,... % when too many episodes it makes slower creating episode =20000000
+        'MaxEpisodes',3000,... % when too many episodes it makes slower creating episode =20000000
         'MaxStepsPerEpisode', params.maxNumberStepsInEpisodes,...
         'StopTrainingCriteria',"AverageReward",...
         'StopTrainingValue', 600,... % new rewards
@@ -179,7 +179,7 @@ params.reward_function = @(env, action, observation) ...
 params.unifyActions = false;
 
 % params.speeds = [170, 170, 255, 170]; % little, idx, thumb, mid
-params.speeds = 100* [1, 1, 1, 1]; % little, idx, thumb, mid %params.speeds = 100* [1, 1, 1, 1];
+params.speeds = [140, 100, 160, 70]; %100* [1, 1, 1, 1]; % little, idx, thumb, mid %params.speeds = 100* [1, 1, 1, 1];
 
 % clipping
 % when true, the reward function can limit, modify or clip the action.
