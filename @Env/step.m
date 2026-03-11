@@ -157,8 +157,8 @@ function [observation, reward, isDone, loggedSignals] = step(this, action)
     encRawLast = encRawMat(end,:);
 
     % Ajuste provisional con rangos realistas observados
-    encMin = [0 0 0 -10];
-    encMax = [390 340 330 340];
+    encMin = [0 0 -5 -10];
+    encMax = [250 320 120 340];
 
     adjEnc = (encRawMat - encMin) ./ (encMax - encMin);
     adjEnc = max(0, min(1, adjEnc));

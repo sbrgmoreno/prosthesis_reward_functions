@@ -9,8 +9,8 @@ function state = calculateState(this, emg, motorData)
     encRawMat = motorData;   % Nx4
 
     % Ajuste provisional con rangos realistas observados
-    encMin = [0 0 0 -10];
-    encMax = [390 340 330 340];
+    encMin = [0 0 -5 -10];
+    encMax = [250 320 120 340];
 
     qMat = (encRawMat - encMin) ./ (encMax - encMin);
     qMat = max(0, min(1, qMat));
