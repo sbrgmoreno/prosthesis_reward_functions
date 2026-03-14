@@ -9,6 +9,9 @@ function [observation, reward, isDone, loggedSignals] = step(this, action)
         this.mseLog          = NaN(1, this.maxNumberStepsInEpisodes);
         this.successLog      = NaN(1, this.maxNumberStepsInEpisodes);
         this.nearSuccessLog  = NaN(1, this.maxNumberStepsInEpisodes);
+        
+        % reset de memoria para dq en calculateState
+        this.prevQ = [];
     end
 
     % Unify actions if needed (single action -> 4 motors)

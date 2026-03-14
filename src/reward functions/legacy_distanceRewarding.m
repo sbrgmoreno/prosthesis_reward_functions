@@ -2457,39 +2457,149 @@ function [reward, rewardVector, action] = legacy_distanceRewarding(this, action)
 
 
 
-% % % % %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% % % % % %%%%%%%%%%%%%%%% VERSION 15 REWARD SIMPLE ERR_PREV - ERR_ACT + BONUS %%%%%%%%%%%%%%%%
-% % % % %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% % % % % %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% % % % % % %%%%%%%%%%%%%%%% VERSION 15 REWARD SIMPLE ERR_PREV - ERR_ACT + BONUS %%%%%%%%%%%%%%%%
+% % % % % %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% %function [reward, rewardVector, action] = legacy_distanceRewarding(this, action)
+% % ============================================================
+% % Reward simple + terminal bonus
+% % ------------------------------------------------------------
+% % 1) Reward principal: progreso en reducción del error
+% %       reward = prevErrNorm - currErrNorm
+% %
+% % 2) Bonus por "near success"
+% % 3) Bonus mayor por "strict success"
+% %
+% % Compatible con pipeline:
+% %   function [reward, rewardVector, action] = legacy_distanceRewarding(this, action)
+% % ============================================================
+% 
+%     persistent prevErrNorm prevNearFlag prevSuccessFlag
+% 
+%     % --------------------------------------------------------
+%     % Reset por episodio
+%     % --------------------------------------------------------
+%     if this.c == 1 || isempty(prevErrNorm)
+%         prevErrNorm    = NaN;
+%         prevNearFlag   = false;
+%         prevSuccessFlag = false;
+%     end
+% 
+%     % --------------------------------------------------------
+%     % Estado actual
+%     % --------------------------------------------------------
+%     q     = this.adjustEnc(end,:);      % estado actual de prótesis
+%     q_ref = this.flexConverted(end,:);  % referencia
+%     err   = q - q_ref;
+%     absErr = abs(err);
+% 
+%     currErrNorm = norm(err);
+% 
+%     % --------------------------------------------------------
+%     % Umbrales
+%     % --------------------------------------------------------
+%     thrSuccess = 0.20;   % mismo criterio estricto que estás usando en step
+%     thrNear    = 0.30;   % zona intermedia más permisiva
+% 
+%     isNear    = all(absErr < thrNear);
+%     isSuccess = all(absErr < thrSuccess);
+% 
+%     % --------------------------------------------------------
+%     % 1) Reward por progreso
+%     % --------------------------------------------------------
+%     if isnan(prevErrNorm)
+%         progressReward = 0;
+%     else
+%         progressReward = prevErrNorm - currErrNorm;
+%     end
+% 
+%     % --------------------------------------------------------
+%     % 2) Bonus terminal / por región objetivo
+%     % --------------------------------------------------------
+%     nearBonus = 0;
+%     successBonus = 0;
+% 
+%     % Bonus solo cuando entra por primera vez a la región
+%     if isNear && ~prevNearFlag
+%         nearBonus = 0.5;
+%     end
+% 
+%     if isSuccess && ~prevSuccessFlag
+%         successBonus = 2.0;
+%     end
+% 
+%     % Bonus de mantenimiento suave si ya está dentro
+%     if isSuccess
+%         successBonus = successBonus + 0.2;
+%     elseif isNear
+%         nearBonus = nearBonus + 0.05;
+%     end
+% 
+%     % --------------------------------------------------------
+%     % Reward total
+%     % --------------------------------------------------------
+%     reward = progressReward + nearBonus + successBonus;
+% 
+%     % --------------------------------------------------------
+%     % Vector de reward compatible con tu pipeline
+%     % --------------------------------------------------------
+%     rewardVector = reward * ones(1, length(action));
+% 
+%     % --------------------------------------------------------
+%     % Actualizar memoria para siguiente step
+%     % --------------------------------------------------------
+%     prevErrNorm     = currErrNorm;
+%     prevNearFlag    = isNear;
+%     prevSuccessFlag = isSuccess;
+% 
+%     % --------------------------------------------------------
+%     % Debug opcional
+%     % --------------------------------------------------------
+%     if this.verbose && (this.c == 1 || mod(this.c,5) == 1)
+%         fprintf(['[RW SIMPLE+BONUS] step=%d | errNorm=%.4f | progress=%.4f | ' ...
+%                  'near=%d | success=%d | nearBonus=%.2f | successBonus=%.2f | total=%.4f\n'], ...
+%                  this.c, currErrNorm, progressReward, ...
+%                  isNear, isSuccess, nearBonus, successBonus, reward);
+%     end
+% end
+% % % % % %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+
+
+
+
+% % % % % %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% % % % % % %%%%%%%%%%%%%%%% VERSION 16 REWARD SIMPLE ERR_PREV - ERR_ACT + BONUS + INACTIVITY PENALTY %%%%%%%%%%%%%%%%
+% % % % % %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %function [reward, rewardVector, action] = legacy_distanceRewarding(this, action)
 % ============================================================
-% Reward simple + terminal bonus
-% ------------------------------------------------------------
-% 1) Reward principal: progreso en reducción del error
-%       reward = prevErrNorm - currErrNorm
-%
-% 2) Bonus por "near success"
-% 3) Bonus mayor por "strict success"
-%
-% Compatible con pipeline:
+% Reward with:
+% 1) global progress
+% 2) motor-wise progress shaping
+% 3) near-success bonus
+% 4) success bonus
+% Compatible with:
 %   function [reward, rewardVector, action] = legacy_distanceRewarding(this, action)
 % ============================================================
 
-    persistent prevErrNorm prevNearFlag prevSuccessFlag
+    persistent prevErrNorm prevAbsErr prevNearFlag prevSuccessFlag
 
     % --------------------------------------------------------
     % Reset por episodio
     % --------------------------------------------------------
     if this.c == 1 || isempty(prevErrNorm)
-        prevErrNorm    = NaN;
-        prevNearFlag   = false;
+        prevErrNorm     = NaN;
+        prevAbsErr      = NaN(1,4);
+        prevNearFlag    = false;
         prevSuccessFlag = false;
     end
 
     % --------------------------------------------------------
     % Estado actual
     % --------------------------------------------------------
-    q     = this.adjustEnc(end,:);      % estado actual de prótesis
-    q_ref = this.flexConverted(end,:);  % referencia
+    q     = this.adjustEnc(end,:);
+    q_ref = this.flexConverted(end,:);
     err   = q - q_ref;
     absErr = abs(err);
 
@@ -2498,57 +2608,85 @@ function [reward, rewardVector, action] = legacy_distanceRewarding(this, action)
     % --------------------------------------------------------
     % Umbrales
     % --------------------------------------------------------
-    thrSuccess = 0.20;   % mismo criterio estricto que estás usando en step
-    thrNear    = 0.30;   % zona intermedia más permisiva
+    thrSuccess = 0.20;
+    thrNear    = 0.30;
 
     isNear    = all(absErr < thrNear);
     isSuccess = all(absErr < thrSuccess);
 
     % --------------------------------------------------------
-    % 1) Reward por progreso
+    % 1) Progreso global
     % --------------------------------------------------------
     if isnan(prevErrNorm)
-        progressReward = 0;
+        globalProgress = 0;
     else
-        progressReward = prevErrNorm - currErrNorm;
+        globalProgress = prevErrNorm - currErrNorm;
     end
 
     % --------------------------------------------------------
-    % 2) Bonus terminal / por región objetivo
+    % 2) Progreso por motor
+    %    positivo si baja |error_i|
+    % --------------------------------------------------------
+    if any(isnan(prevAbsErr))
+        motorProgress = 0;
+    else
+        motorDelta = prevAbsErr - absErr;   % 1x4
+        motorProgress = mean(motorDelta);
+    end
+
+    % --------------------------------------------------------
+    % 3) Bonos terminales
     % --------------------------------------------------------
     nearBonus = 0;
     successBonus = 0;
 
-    % Bonus solo cuando entra por primera vez a la región
     if isNear && ~prevNearFlag
-        nearBonus = 0.5;
+        nearBonus = 0.75;
     end
 
     if isSuccess && ~prevSuccessFlag
-        successBonus = 2.0;
+        successBonus = 3.0;
     end
 
-    % Bonus de mantenimiento suave si ya está dentro
+    % mantenimiento suave dentro de la región
     if isSuccess
-        successBonus = successBonus + 0.2;
+        successBonus = successBonus + 0.20;
     elseif isNear
         nearBonus = nearBonus + 0.05;
     end
 
     % --------------------------------------------------------
-    % Reward total
+    % 4) Penalización muy leve por inacción total
+    %    solo si la acción es cero en todos los motores
     % --------------------------------------------------------
-    reward = progressReward + nearBonus + successBonus;
+    inactivityPenalty = 0;
+    if all(action == 0)
+        inactivityPenalty = -0.02;
+    end
 
     % --------------------------------------------------------
-    % Vector de reward compatible con tu pipeline
+    % 5) Reward total
+    % pesos:
+    % - globalProgress: guía general
+    % - motorProgress: refinamiento por dedo
+    % --------------------------------------------------------
+    reward = ...
+        0.7 * globalProgress + ...
+        0.3 * motorProgress + ...
+        nearBonus + ...
+        successBonus + ...
+        inactivityPenalty;
+
+    % --------------------------------------------------------
+    % Reward vector compatible
     % --------------------------------------------------------
     rewardVector = reward * ones(1, length(action));
 
     % --------------------------------------------------------
-    % Actualizar memoria para siguiente step
+    % Actualizar memoria
     % --------------------------------------------------------
     prevErrNorm     = currErrNorm;
+    prevAbsErr      = absErr;
     prevNearFlag    = isNear;
     prevSuccessFlag = isSuccess;
 
@@ -2556,10 +2694,9 @@ function [reward, rewardVector, action] = legacy_distanceRewarding(this, action)
     % Debug opcional
     % --------------------------------------------------------
     if this.verbose && (this.c == 1 || mod(this.c,5) == 1)
-        fprintf(['[RW SIMPLE+BONUS] step=%d | errNorm=%.4f | progress=%.4f | ' ...
-                 'near=%d | success=%d | nearBonus=%.2f | successBonus=%.2f | total=%.4f\n'], ...
-                 this.c, currErrNorm, progressReward, ...
+        fprintf(['[RW MOTOR-SHAPING] step=%d | errNorm=%.4f | gProg=%.4f | ' ...
+                 'mProg=%.4f | near=%d | success=%d | nB=%.2f | sB=%.2f | total=%.4f\n'], ...
+                 this.c, currErrNorm, globalProgress, motorProgress, ...
                  isNear, isSuccess, nearBonus, successBonus, reward);
     end
 end
-% % % % %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

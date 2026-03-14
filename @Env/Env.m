@@ -115,6 +115,8 @@ classdef Env < rl.env.MATLABEnvironment
         % buffers aux vars
         flexConverted;
         adjustEnc;
+        % dq_t y dq_t-1
+        prevQ = [];
 
         % --- logs: for saving episode recording data
         % timestamp of init of episode with and without home [reset]

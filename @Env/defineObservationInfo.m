@@ -5,6 +5,7 @@ function obsInfo = defineObservationInfo()
 %   - EMG features
 %   - current prosthesis state q
 %   - tracking error err = q_ref - q
+%   - delta state dq = q_t - q_(t-1)
 
 %% aux vars
 params = configurables();
@@ -26,6 +27,10 @@ qMax = 1;
 errMin = -1;
 errMax = 1;
 
+% dq = q_t - q_(t-1), with q in [0,1]
+dqMin = -1;
+dqMax = 1;
+
 %% creating observation space
 obsInfo = rlNumericSpec([stateLength 1]); % col-wise
 
@@ -33,21 +38,72 @@ obsInfo = rlNumericSpec([stateLength 1]); % col-wise
 obsInfo.LowerLimit = [ ...
     EMGFeaturesMin * ones(numEMGFeatures, 1); ...
     qMin   * ones(numMotors, 1); ...
-    errMin * ones(numMotors, 1)];
+    errMin * ones(numMotors, 1); ...
+    dqMin  * ones(numMotors, 1)];
 
 obsInfo.UpperLimit = [ ...
     EMGFeaturesMax * ones(numEMGFeatures, 1); ...
     qMax   * ones(numMotors, 1); ...
-    errMax * ones(numMotors, 1)];
+    errMax * ones(numMotors, 1); ...
+    dqMax  * ones(numMotors, 1)];
 
 obsInfo.Name = 'prosthesis_state';
 obsInfo.Description = sprintf( ...
-    'State defined with %d EMG features, %d encoder states, and %d tracking errors', ...
-    numEMGFeatures, numMotors, numMotors);
+    'State defined with %d EMG features, %d encoder states, %d tracking errors, and %d dq values', ...
+    numEMGFeatures, numMotors, numMotors, numMotors);
 end
 
+%-----------------------------------------------------------------------------------------------
+% function obsInfo = defineObservationInfo()
+% % defineObservationInfo() returns the limits and dimension of the
+% % observation of the environment.
+% % The observation is defined as the concatenation of:
+% %   - EMG features
+% %   - current prosthesis state q
+% %   - tracking error err = q_ref - q
+% 
+% %% aux vars
+% params = configurables();
+% hardware = definitions();
+% 
+% numEMGFeatures = configurables("numEMGFeatures");
+% numMotors = hardware.numMotors;
+% stateLength = configurables("stateLength");
+% 
+% % Ranges
+% EMGFeaturesMin = -inf;
+% EMGFeaturesMax = inf;
+% 
+% % q normalized
+% qMin = 0;
+% qMax = 1;
+% 
+% % err = q_ref - q, assuming both normalized in [0,1]
+% errMin = -1;
+% errMax = 1;
+% 
+% %% creating observation space
+% obsInfo = rlNumericSpec([stateLength 1]); % col-wise
+% 
+% %% limits
+% obsInfo.LowerLimit = [ ...
+%     EMGFeaturesMin * ones(numEMGFeatures, 1); ...
+%     qMin   * ones(numMotors, 1); ...
+%     errMin * ones(numMotors, 1)];
+% 
+% obsInfo.UpperLimit = [ ...
+%     EMGFeaturesMax * ones(numEMGFeatures, 1); ...
+%     qMax   * ones(numMotors, 1); ...
+%     errMax * ones(numMotors, 1)];
+% 
+% obsInfo.Name = 'prosthesis_state';
+% obsInfo.Description = sprintf( ...
+%     'State defined with %d EMG features, %d encoder states, and %d tracking errors', ...
+%     numEMGFeatures, numMotors, numMotors);
+% end
 
 
+%-----------------------------------------------------------------------------------------------
 
 %% ANTES DESCOMENTADO
 % function obsInfo = defineObservationInfo()
