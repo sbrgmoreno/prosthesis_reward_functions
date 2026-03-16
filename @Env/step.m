@@ -301,6 +301,12 @@ function [observation, reward, isDone, loggedSignals] = step(this, action)
         this.finalMaxAbsErr     = max(finalErr);
         this.nearSuccessEpisode = any(this.nearSuccessLog(1:this.c) == 1);
 
+
+        % ===== guardar historial por episodio =====
+        this.finalMeanAbsErrEpisode(this.episodeCount) = this.finalMeanAbsErr;
+        this.finalMaxAbsErrEpisode(this.episodeCount)  = this.finalMaxAbsErr;
+        this.nearSuccessEpisodeHistory(this.episodeCount) = this.nearSuccessEpisode;
+        
         % ===== resumen de acciones usadas =====
         A_ep = this.aRawLog(1:this.c,:);
         [Auniq, ~, ic] = unique(A_ep, 'rows');

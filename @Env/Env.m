@@ -157,6 +157,17 @@ classdef Env < rl.env.MATLABEnvironment
         %%%%%%%%%%%%%%%%%%%%%%%%----------------------%%%%%%%%%%%%%%%%%%%%%%%%%
         %%%%%%%%%%%%%%%%%%%%%%%%----------------------%%%%%%%%%%%%%%%%%%%%%%%%%
         
+        %%%%%%%%%%%%%%%%%%%%%%%%----------------------%%%%%%%%%%%%%%%%%%%%%%%%%
+               %      METRICAS PROMEDIO CADA 1000 ULTIMOS STEPS    %
+        %%%%%%%%%%%%%%%%%%%%%%%%----------------------%%%%%%%%%%%%%%%%%%%%%%%%%
+
+        % ---- Historial por episodio de métricas finales
+        finalMeanAbsErrEpisode = [];       % [numEpisodes x 1]
+        finalMaxAbsErrEpisode = [];        % [numEpisodes x 1]
+        nearSuccessEpisodeHistory = [];    % [numEpisodes x 1]
+        %%%%%%%%%%%%%%%%%%%%%%%%----------------------%%%%%%%%%%%%%%%%%%%%%%%%%
+        %%%%%%%%%%%%%%%%%%%%%%%%----------------------%%%%%%%%%%%%%%%%%%%%%%%%%
+        
 
         %%%%%%%%%%%%%%%%%%%%%%%%----------------------%%%%%%%%%%%%%%%%%%%%%%%%%
                          %      METRICAS DE SENSIBILIDAD     %
@@ -333,6 +344,11 @@ classdef Env < rl.env.MATLABEnvironment
             this.meanDistLog = [];
             this.mseLog = [];
             this.successLog = [];
+
+            % ---- Historial de métricas finales por episodio
+            this.finalMeanAbsErrEpisode = [];
+            this.finalMaxAbsErrEpisode = [];
+            this.nearSuccessEpisodeHistory = [];
             %%%%%%%%%%%%%%%%%%%%%%%%----------------------%%%%%%%%%%%%%%%%%%%%%%%%%
             %%%%%%%%%%%%%%%%%%%%%%%%----------------------%%%%%%%%%%%%%%%%%%%%%%%%%
 
