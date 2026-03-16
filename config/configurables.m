@@ -54,7 +54,7 @@ end
  params.returnHomeAtEndEpisode = true; % important with sims
 % params.returnHomeAtEndEpisode = false; %train RT
 
-params.maxNumberStepsInEpisodes = 50;% max buffer in episode
+params.maxNumberStepsInEpisodes = 100; %50;% max buffer in episode
 
 % When using prerecorded, waits till data is exhausted, ignores episode
 % duration.
