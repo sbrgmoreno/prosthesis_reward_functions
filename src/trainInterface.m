@@ -1,5 +1,5 @@
-%function trainingInfo = trainInterface(agent_id, param_name, param_value)
-function [agent, env, trainingInfo] = trainInterface(agent_id, param_name, param_value)
+function trainingInfo = trainInterface(agent_id, param_name, param_value)
+%function [agent, env, trainingInfo] = trainInterface(agent_id, param_name, param_value)
 
 %% Input Validation
 arguments
@@ -95,8 +95,8 @@ if configs.run_training
     opts.SaveAgentDirectory = agent_dir;
 
     env.log("Starting training!");
-    %trainingInfo = train(agent, env, opts);  %!!!!!!!! ANTES DESCOMENTADO
-    [agent, trainingInfo] = train(agent, env, opts);
+    trainingInfo = train(agent, env, opts);  %!!!!!!!! ANTES DESCOMENTADO
+    %[agent, trainingInfo] = train(agent, env, opts);
 
     figure;
     plot(env.meanDistEpisode, 'LineWidth', 1.5);
