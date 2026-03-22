@@ -60,7 +60,18 @@ function [observation, reward, isDone, loggedSignals] = step(this, action)
     this.actionSatLog(this.c,:) = actionSat;
 
     % Acción aplicada al controlador (con speeds)
-    actionApplied = actionSat .* this.speeds;
+    %actionApplied = actionSat .* this.speeds;
+    %%%%%%%%%%%%%%% ^   %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    %%%%%%%%%%%%%%% |   %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    %%%%%%%%%%%%%%% |   %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    actionGain = configurables("actionGain");   % o this.actionGain si lo haces propiedad
+    actionApplied = actionSat .* this.speeds * actionGain;
+    
+    % Saturación de seguridad para simulador/controlador
+    CTRL_MIN = -255;
+    CTRL_MAX = 255;
+    actionApplied = max(min(actionApplied, CTRL_MAX), CTRL_MIN);
+    %%%%%%%%%%%% 1 LINEA COMENTADA %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
     fprintf("[DBG] actionSat=%s | speeds=%s | actionApplied=%s\n", ...
         mat2str(actionSat), mat2str(this.speeds), mat2str(actionApplied));
@@ -306,7 +317,7 @@ function [observation, reward, isDone, loggedSignals] = step(this, action)
         this.finalMeanAbsErrEpisode(this.episodeCount) = this.finalMeanAbsErr;
         this.finalMaxAbsErrEpisode(this.episodeCount)  = this.finalMaxAbsErr;
         this.nearSuccessEpisodeHistory(this.episodeCount) = this.nearSuccessEpisode;
-        
+
         % ===== resumen de acciones usadas =====
         A_ep = this.aRawLog(1:this.c,:);
         [Auniq, ~, ic] = unique(A_ep, 'rows');

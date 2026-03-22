@@ -65,6 +65,12 @@ params.period = 0.2; % reading time
 params.verbose = true;  % print every statement verbose
 
 
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% PROBAR CON SPEED %%%%%%%%%%%%%%%%%%%%%%%%%
+params.actionGain = 1.0;
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
 %% Simulate or train
 % when ``run_training`` is true, the environment trains the agent.
 % when false, only uses the agent (simulation aka evaluation). Some configs
@@ -179,7 +185,7 @@ params.reward_function = @(env, action, observation) ...
 params.unifyActions = false;
 
 % params.speeds = [170, 170, 255, 170]; % little, idx, thumb, mid
-params.speeds = [140, 100, 160, 70]; %100* [1, 1, 1, 1]; % little, idx, thumb, mid %params.speeds = 100* [1, 1, 1, 1];
+params.speeds = [140, 100, 160, 70] ;%[140, 100, 160, 70]        %100* [1, 1, 1, 1]; % little, idx, thumb, mid %params.speeds = 100* [1, 1, 1, 1];
 
 % clipping
 % when true, the reward function can limit, modify or clip the action.
@@ -225,7 +231,7 @@ params.flexJoined_scale = @(x) x./[4092 2046 1023 2046];
 %%Para
 % Parameters that affect getObservationInfo()
 params.numEMGFeatures = 40;
-params.stateLength = 52; % 40 EMG + 4 q + 4 err + 4 dq 48; % 40 EMG + 4 q + 4 err %params.stateLength = 44; % num state features: EMG features + motors
+params.stateLength = 56; % 52; % 40 EMG + 4 q + 4 err + 4 dq 48; % 40 EMG + 4 q + 4 err %params.stateLength = 44; % num state features: EMG features + motors
 
 % -- Cinematic info: Encoder
 % max unreachable limits, uses the limit of the ring|little
