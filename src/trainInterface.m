@@ -125,6 +125,40 @@ if configs.run_training
 
     save(fullfile(agent_dir, "custom_metrics_V0.mat"), "metrics");
 
+% else
+%     simpOpts = configs.simOpts;
+%     env.log("Starting evaluation!");
+% 
+%     Nsims = simpOpts.NumSimulations;
+%     simpOpts.NumSimulations = 1;
+% 
+%     outDir = fullfile(agent_dir, "eval_figs");
+%     if ~exist(outDir,'dir')
+%         mkdir(outDir);
+%     end
+% 
+%     for i = 1:Nsims
+%         env.log(sprintf("Evaluation episode %d / %d", i, Nsims));
+% 
+%         simInfo = sim(agent, env, simpOpts);
+% 
+%         env.plot;
+%         drawnow;
+% 
+%         f = gcf;
+%         fname = fullfile(outDir, sprintf("Eval_Ep_%03d.png", i));
+%         exportgraphics(f, fname, 'Resolution', 200);
+% 
+%         save(fullfile(outDir, sprintf("Eval_Ep_%03d_simInfo.mat", i)), ...
+%              "simInfo");
+% 
+%         close(f);
+%     end
+% 
+%     env.log("Evaluation episodes and figures saved.");
+%     trainingInfo = [];
+% end
+
 else
     simpOpts = configs.simOpts;
     env.log("Starting evaluation!");
@@ -137,11 +171,36 @@ else
         mkdir(outDir);
     end
 
+    % ============================================================
+    % NUEVO: almacenamiento de episodios evaluados
+    % ============================================================
+    evalEpisodes = cell(Nsims,1);
+
     for i = 1:Nsims
         env.log(sprintf("Evaluation episode %d / %d", i, Nsims));
 
         simInfo = sim(agent, env, simpOpts);
 
+        % ========================================================
+        % NUEVO: guardar logs del episodio actual
+        % ========================================================
+        ep = struct();
+        ep.qLog        = env.qLog(1:env.c,:);
+        ep.qRefLog     = env.qRefLog(1:env.c,:);
+        ep.aRawLog     = env.aRawLog(1:env.c,:);
+        ep.aAppliedLog = env.aAppliedLog(1:env.c,:);
+
+        % opcionales, útiles para análisis posterior
+        ep.meanDistLog    = env.meanDistLog(1:env.c);
+        ep.mseLog         = env.mseLog(1:env.c);
+        ep.successLog     = env.successLog(1:env.c);
+        ep.nearSuccessLog = env.nearSuccessLog(1:env.c);
+
+        evalEpisodes{i} = ep;
+
+        % ========================================================
+        % Guardar imagen del episodio
+        % ========================================================
         env.plot;
         drawnow;
 
@@ -149,13 +208,62 @@ else
         fname = fullfile(outDir, sprintf("Eval_Ep_%03d.png", i));
         exportgraphics(f, fname, 'Resolution', 200);
 
+        % Guardar simInfo y logs del episodio
         save(fullfile(outDir, sprintf("Eval_Ep_%03d_simInfo.mat", i)), ...
-             "simInfo");
+             "simInfo", "ep");
 
         close(f);
     end
 
+    % ============================================================
+    % NUEVO: calcular métricas sobre todos los episodios
+    % ============================================================
+    [metricsTable, summary] = compute_eval_set_metrics(evalEpisodes, env.period, 0.20);
+
     env.log("Evaluation episodes and figures saved.");
+    env.log("Evaluation metrics computed.");
+
+    % Mostrar en consola
+    disp('===== TABLA POR EPISODIO =====');
+    disp(metricsTable);
+
+    disp('===== RESUMEN GLOBAL =====');
+    disp(summary);
+
+    % Guardar tabla por episodio
+    writetable(metricsTable, fullfile(agent_dir, "evaluation_metrics_table.csv"));
+
+    % Convertir summary struct a tabla
+    summaryTable = table( ...
+        summary.MAE_mean, ...
+        summary.MSE_mean, ...
+        summary.SuccessRate_mean, ...
+        summary.SteadyStateError_mean, ...
+        summary.Delay_mean, ...
+        summary.RiseTime_mean, ...
+        summary.Overshoot_mean, ...
+        summary.Corr_mean, ...
+        summary.ControlEffort_mean, ...
+        summary.Smoothness_mean, ...
+        summary.FinalMeanAbsError_mean, ...
+        summary.FinalMaxAbsError_mean, ...
+        summary.TQS_mean, ...
+        'VariableNames', { ...
+            'MAE', 'MSE', 'SuccessRate', 'SteadyStateError', ...
+            'Delay', 'RiseTime', 'Overshoot', 'Correlation', ...
+            'ControlEffort', 'Smoothness', ...
+            'FinalMeanAbsError', 'FinalMaxAbsError', 'TQS' ...
+        });
+
+    disp('===== TABLA RESUMEN =====');
+    disp(summaryTable);
+
+    writetable(summaryTable, fullfile(agent_dir, "evaluation_summary_table.csv"));
+
+    % Guardar también en MAT
+    save(fullfile(agent_dir, "evaluation_metrics.mat"), ...
+         "evalEpisodes", "metricsTable", "summary", "summaryTable");
+
     trainingInfo = [];
 end
 

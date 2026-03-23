@@ -115,7 +115,7 @@ end
 if ~params.newTraining
 
     params.agentFile = ...
-        "C:\trainedAgentsProtesisNew\00_oldy\_\DDQN_81_Espacio_Acciones\V15\26-03-11 13 6 55\Agent3000.mat";
+        "C:\trainedAgentsProtesisNew\00_oldy\_\DDQN_81_Espacio_Acciones\Num_Steps_100\V21_20000_Episodes\Num_Steps_100\26-03-19 19 30 36\Agent20000.mat";
     params.agent_id = 'best'; %'QRDQN_v6';%'best'; % or name
     % params.agentFile = ...
     %     ".\trainedAgents\Agent3.mat";
