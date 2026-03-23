@@ -3517,18 +3517,211 @@ function [reward, rewardVector, action] = legacy_distanceRewarding(this, action)
 
 
 
-% % % % % % % % % % % %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% % % % % % % % % % % % %%%%%%%%%%%%%%%% VERSION 22 Huber %%%%%%%%%%%%%%%%
-% % % % % % % % % % % %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% % % %
-% %function [reward, rewardVector, action] = reward_huber_precision_v6(this, action)
+% % % % % % % % % % % % %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% % % % % % % % % % % % % %%%%%%%%%%%%%%%% VERSION 22 Huber %%%%%%%%%%%%%%%%
+% % % % % % % % % % % % %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% % % % %
+% % %function [reward, rewardVector, action] = reward_huber_precision_v6(this, action)
+% % ============================================================
+% % Reward v6:
+% % - Error actual con Huber
+% % - Progreso incremental dominante
+% % - Bonus de precision localizado
+% % - Penalizacion de magnitud de accion
+% % - Penalizacion por cambio brusco de accion
+% % - Bonus suaves por near/success
+% % ============================================================
+% 
+%     persistent previousErrNorm prevAction prevNearFlag prevSuccessFlag stableSuccessCount
+% 
+%     % --------------------------------------------------------
+%     % Reset por episodio
+%     % --------------------------------------------------------
+%     if this.c == 1 || isempty(previousErrNorm)
+%         previousErrNorm     = [];
+%         prevAction          = zeros(size(action));
+%         prevNearFlag        = false;
+%         prevSuccessFlag     = false;
+%         stableSuccessCount  = 0;
+%     end
+% 
+%     % --------------------------------------------------------
+%     % Estado actual
+%     % --------------------------------------------------------
+%     q     = this.adjustEnc(end,:);
+%     q_ref = this.flexConverted(end,:);
+% 
+%     err    = q - q_ref;
+%     absErr = abs(err);
+% 
+%     meanAbsErr = mean(absErr);
+%     errNorm    = norm(err);
+% 
+%     % --------------------------------------------------------
+%     % Umbrales
+%     % --------------------------------------------------------
+%     thrSuccess = 0.20;
+%     thrNear    = 0.30;
+% 
+%     isNear    = all(absErr < thrNear);
+%     isSuccess = all(absErr < thrSuccess);
+% 
+%     % --------------------------------------------------------
+%     % 1) Penalizacion por error actual (Huber)
+%     % --------------------------------------------------------
+%     delta = 0.10;
+%     huberVals = zeros(size(err));
+% 
+%     for i = 1:length(err)
+%         e = abs(err(i));
+%         if e <= delta
+%             huberVals(i) = 0.5 * e^2;
+%         else
+%             huberVals(i) = delta * (e - 0.5 * delta);
+%         end
+%     end
+% 
+%     huberMean = mean(huberVals);
+% 
+%     % Error actual: castigo base
+%     r_error = -1.0 * huberMean;
+% 
+%     % --------------------------------------------------------
+%     % 2) Progreso incremental (termino principal)
+%     % --------------------------------------------------------
+%     if isempty(previousErrNorm) || this.c == 1
+%         deltaErr = 0;
+%     else
+%         deltaErr = previousErrNorm - errNorm;   % positivo si mejora
+%     end
+% 
+%     r_progress = 2.5 * deltaErr;
+% 
+%     % --------------------------------------------------------
+%     % 3) Bonus de precision localizado
+%     %    Solo empieza a actuar cuando ya esta relativamente cerca
+%     % --------------------------------------------------------
+%     precisionBonus = 0;
+% 
+%     if errNorm < 0.50
+%         precisionBonus = 0.4 * (0.50 - errNorm);
+%     end
+% 
+%     if errNorm < 0.25
+%         precisionBonus = precisionBonus + 0.8 * (0.25 - errNorm);
+%     end
+% 
+%     if errNorm < 0.10
+%         precisionBonus = precisionBonus + 1.2 * (0.10 - errNorm);
+%     end
+% 
+%     % --------------------------------------------------------
+%     % 4) Bonus suaves por near / success
+%     % --------------------------------------------------------
+%     nearBonus = 0;
+%     successBonus = 0;
+% 
+%     if isNear && ~prevNearFlag
+%         nearBonus = 0.25;
+%     end
+% 
+%     if isSuccess && ~prevSuccessFlag
+%         successBonus = 0.80;
+%     end
+% 
+%     if isSuccess
+%         stableSuccessCount = stableSuccessCount + 1;
+%         successBonus = successBonus + 0.05 * min(stableSuccessCount, 10);
+%     else
+%         stableSuccessCount = 0;
+%     end
+% 
+%     % --------------------------------------------------------
+%     % 5) Penalizacion por salir de zona buena
+%     % --------------------------------------------------------
+%     leavePenalty = 0;
+% 
+%     if prevSuccessFlag && ~isSuccess
+%         leavePenalty = -0.20;
+%     elseif prevNearFlag && ~isNear
+%         leavePenalty = -0.08;
+%     end
+% 
+%     % --------------------------------------------------------
+%     % 6) Penalizacion por magnitud de accion
+%     % --------------------------------------------------------
+%     actionPenalty = -0.02 * mean(action.^2);
+% 
+%     % --------------------------------------------------------
+%     % 7) Penalizacion por cambio brusco de accion
+%     % --------------------------------------------------------
+%     actionChangePenalty = -0.03 * mean((action - prevAction).^2);
+% 
+%     % --------------------------------------------------------
+%     % 8) Penalizacion por inaccion total
+%     % --------------------------------------------------------
+%     inactivityPenalty = 0;
+%     if all(action == 0)
+%         inactivityPenalty = -0.01;
+%     end
+% 
+%     % --------------------------------------------------------
+%     % 9) Reward total
+%     % --------------------------------------------------------
+%     reward = ...
+%         r_error + ...
+%         r_progress + ...
+%         precisionBonus + ...
+%         nearBonus + ...
+%         successBonus + ...
+%         leavePenalty + ...
+%         actionPenalty + ...
+%         actionChangePenalty + ...
+%         inactivityPenalty;
+% 
+%     % --------------------------------------------------------
+%     % Reward vector compatible
+%     % --------------------------------------------------------
+%     rewardVector = reward * ones(1, length(action));
+% 
+%     % --------------------------------------------------------
+%     % Actualizar memoria
+%     % --------------------------------------------------------
+%     previousErrNorm  = errNorm;
+%     prevAction       = action;
+%     prevNearFlag     = isNear;
+%     prevSuccessFlag  = isSuccess;
+% 
+%     % --------------------------------------------------------
+%     % Debug opcional
+%     % --------------------------------------------------------
+%     if this.verbose && (this.c == 1 || mod(this.c,5) == 1)
+%         fprintf(['[RW V6] step=%d | errNorm=%.4f | meanAbsErr=%.4f | ' ...
+%                  'r_error=%.4f | dErr=%.4f | r_prog=%.4f | prec=%.4f | ' ...
+%                  'near=%d | success=%d | nB=%.2f | sB=%.2f | leave=%.2f | ' ...
+%                  'actPen=%.4f | dActPen=%.4f | total=%.4f\n'], ...
+%                  this.c, errNorm, meanAbsErr, ...
+%                  r_error, deltaErr, r_progress, precisionBonus, ...
+%                  isNear, isSuccess, nearBonus, successBonus, ...
+%                  leavePenalty, actionPenalty, actionChangePenalty, reward);
+%     end
+% end
+
+
+
+
+% % % % % % % % % % % % %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% % % % % % % % % % % % % %%%%%%%%%%%%%%%% VERSION 23 Huber penalizacion excesiva, afinamiento a V22 %%%%%%%%%%%%%%%%
+% % % % % % % % % % % % %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% % % % %
+% % %function [reward, rewardVector, action] = reward_huber_precision_v6(this, action)
 % ============================================================
-% Reward v6:
+% Reward v6 ajustada para acciones discretas 4D {-1,0,1}
 % - Error actual con Huber
 % - Progreso incremental dominante
 % - Bonus de precision localizado
-% - Penalizacion de magnitud de accion
-% - Penalizacion por cambio brusco de accion
+% - Penalizacion por accion excesiva
+% - Penalizacion por cambios bruscos
 % - Bonus suaves por near/success
 % ============================================================
 
@@ -3538,11 +3731,11 @@ function [reward, rewardVector, action] = legacy_distanceRewarding(this, action)
     % Reset por episodio
     % --------------------------------------------------------
     if this.c == 1 || isempty(previousErrNorm)
-        previousErrNorm     = [];
-        prevAction          = zeros(size(action));
-        prevNearFlag        = false;
-        prevSuccessFlag     = false;
-        stableSuccessCount  = 0;
+        previousErrNorm    = [];
+        prevAction         = zeros(size(action));
+        prevNearFlag       = false;
+        prevSuccessFlag    = false;
+        stableSuccessCount = 0;
     end
 
     % --------------------------------------------------------
@@ -3553,9 +3746,7 @@ function [reward, rewardVector, action] = legacy_distanceRewarding(this, action)
 
     err    = q - q_ref;
     absErr = abs(err);
-
-    meanAbsErr = mean(absErr);
-    errNorm    = norm(err);
+    errNorm = norm(err);
 
     % --------------------------------------------------------
     % Umbrales
@@ -3567,7 +3758,7 @@ function [reward, rewardVector, action] = legacy_distanceRewarding(this, action)
     isSuccess = all(absErr < thrSuccess);
 
     % --------------------------------------------------------
-    % 1) Penalizacion por error actual (Huber)
+    % 1) Error actual con Huber
     % --------------------------------------------------------
     delta = 0.10;
     huberVals = zeros(size(err));
@@ -3582,8 +3773,6 @@ function [reward, rewardVector, action] = legacy_distanceRewarding(this, action)
     end
 
     huberMean = mean(huberVals);
-
-    % Error actual: castigo base
     r_error = -1.0 * huberMean;
 
     % --------------------------------------------------------
@@ -3595,24 +3784,23 @@ function [reward, rewardVector, action] = legacy_distanceRewarding(this, action)
         deltaErr = previousErrNorm - errNorm;   % positivo si mejora
     end
 
-    r_progress = 2.5 * deltaErr;
+    r_progress = 3.0 * deltaErr;
 
     % --------------------------------------------------------
     % 3) Bonus de precision localizado
-    %    Solo empieza a actuar cuando ya esta relativamente cerca
     % --------------------------------------------------------
     precisionBonus = 0;
 
     if errNorm < 0.50
-        precisionBonus = 0.4 * (0.50 - errNorm);
+        precisionBonus = precisionBonus + 0.30 * (0.50 - errNorm);
     end
 
     if errNorm < 0.25
-        precisionBonus = precisionBonus + 0.8 * (0.25 - errNorm);
+        precisionBonus = precisionBonus + 0.70 * (0.25 - errNorm);
     end
 
     if errNorm < 0.10
-        precisionBonus = precisionBonus + 1.2 * (0.10 - errNorm);
+        precisionBonus = precisionBonus + 1.00 * (0.10 - errNorm);
     end
 
     % --------------------------------------------------------
@@ -3622,22 +3810,22 @@ function [reward, rewardVector, action] = legacy_distanceRewarding(this, action)
     successBonus = 0;
 
     if isNear && ~prevNearFlag
-        nearBonus = 0.25;
+        nearBonus = 0.20;
     end
 
     if isSuccess && ~prevSuccessFlag
-        successBonus = 0.80;
+        successBonus = 0.70;
     end
 
     if isSuccess
         stableSuccessCount = stableSuccessCount + 1;
-        successBonus = successBonus + 0.05 * min(stableSuccessCount, 10);
+        successBonus = successBonus + 0.04 * min(stableSuccessCount, 10);
     else
         stableSuccessCount = 0;
     end
 
     % --------------------------------------------------------
-    % 5) Penalizacion por salir de zona buena
+    % 5) Penalizacion por salir de region buena
     % --------------------------------------------------------
     leavePenalty = 0;
 
@@ -3649,13 +3837,15 @@ function [reward, rewardVector, action] = legacy_distanceRewarding(this, action)
 
     % --------------------------------------------------------
     % 6) Penalizacion por magnitud de accion
+    %    Castiga usar demasiados motores a la vez
     % --------------------------------------------------------
-    actionPenalty = -0.02 * mean(action.^2);
+    activeMotors = sum(action ~= 0);
+    actionPenalty = -0.015 * activeMotors;
 
     % --------------------------------------------------------
     % 7) Penalizacion por cambio brusco de accion
     % --------------------------------------------------------
-    actionChangePenalty = -0.03 * mean((action - prevAction).^2);
+    actionChangePenalty = -0.025 * mean((action - prevAction).^2);
 
     % --------------------------------------------------------
     % 8) Penalizacion por inaccion total
@@ -3696,13 +3886,13 @@ function [reward, rewardVector, action] = legacy_distanceRewarding(this, action)
     % Debug opcional
     % --------------------------------------------------------
     if this.verbose && (this.c == 1 || mod(this.c,5) == 1)
-        fprintf(['[RW V6] step=%d | errNorm=%.4f | meanAbsErr=%.4f | ' ...
-                 'r_error=%.4f | dErr=%.4f | r_prog=%.4f | prec=%.4f | ' ...
-                 'near=%d | success=%d | nB=%.2f | sB=%.2f | leave=%.2f | ' ...
+        fprintf(['[RW V6] step=%d | errNorm=%.4f | r_err=%.4f | dErr=%.4f | ' ...
+                 'r_prog=%.4f | prec=%.4f | near=%d | success=%d | ' ...
+                 'nB=%.2f | sB=%.2f | leave=%.2f | active=%d | ' ...
                  'actPen=%.4f | dActPen=%.4f | total=%.4f\n'], ...
-                 this.c, errNorm, meanAbsErr, ...
-                 r_error, deltaErr, r_progress, precisionBonus, ...
-                 isNear, isSuccess, nearBonus, successBonus, ...
-                 leavePenalty, actionPenalty, actionChangePenalty, reward);
+                 this.c, errNorm, r_error, deltaErr, r_progress, ...
+                 precisionBonus, isNear, isSuccess, ...
+                 nearBonus, successBonus, leavePenalty, activeMotors, ...
+                 actionPenalty, actionChangePenalty, reward);
     end
 end
