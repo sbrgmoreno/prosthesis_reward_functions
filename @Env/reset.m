@@ -49,6 +49,15 @@ this.errNormLog    = nan(this.maxNumberStepsInEpisodes, 1);
 %%%%%%%%%%%%%%%%%%%%%%%%----------------------%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%----------------------%%%%%%%%%%%%%%%%%%%%%%%%%
 
+                       %logs para revisar encoders%
+%%%%%%%%%%%%%%%%%%%%%%%%----------------------%%%%%%%%%%%%%%%%%%%%%%%%%
+this.dErrLog          = nan(this.maxNumberStepsInEpisodes, 1);
+this.encRawLog        = nan(this.maxNumberStepsInEpisodes, 4);
+this.encEffectNormLog = nan(this.maxNumberStepsInEpisodes, 1);
+%%%%%%%%%%%%%%%%%%%%%%%%----------------------%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%----------------------%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
 if this.returnHomeAtEndEpisode
     drawnow
     if this.episodeType == EpisodeType.Closing % check!

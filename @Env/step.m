@@ -357,6 +357,28 @@ function [observation, reward, isDone, loggedSignals] = step(this, action)
         fprintf("\n[ENC RAW] mean ||dEnc|| = %.6f | dead-zone raw = %.2f%%\n", ...
             mean(this.encEffectNormLog(1:this.c), 'omitnan'), ...
             100*mean(this.encEffectNormLog(1:this.c) < 1e-9, 'omitnan'));
+
+        
+        % =========================================================
+        % Guardado para diagnóstico de encoders
+        % =========================================================
+        outDir = fullfile(this.episode_folder, "encoder_diagnostics");
+        if ~exist(outDir, "dir")
+            mkdir(outDir);
+        end
+
+        encoderDiag.episodeCounter = this.episodeCounter;
+        encoderDiag.repetitionId   = this.repetitionId;
+        encoderDiag.episodeType    = this.episodeType;
+        encoderDiag.steps          = this.c;
+
+        % logs efectivos del episodio
+        encoderDiag.encRawLog = this.encRawLog(1:this.c,:);
+        encoderDiag.adjustEncLog = this.qLog(1:this.c,:);       % q normalizado efectivo
+        encoderDiag.flexConvertedLog = this.qRefLog(1:this.c,:); % referencia normalizada efectiva
+
+        save(fullfile(outDir, sprintf("encoder_diag_ep_%04d.mat", this.episodeCounter)), "encoderDiag");
+
     end
 
     if isDone && this.flagSaveTraining
