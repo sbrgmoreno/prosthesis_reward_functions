@@ -19,9 +19,10 @@ function state = calculateState(this, emg, motorData)
     else
         % fallback por seguridad
         encRawMat = motorData;
-
-        encMin = [0 0 -5 -10];
-        encMax = [250 320 120 340];
+        
+        %normalizacion con pa/p99
+        encMin = [-10, 0, -1, 0];
+        encMax = [175, 235, 485, 185];
 
         qMat = (encRawMat - encMin) ./ (encMax - encMin);
         qMat = max(0, min(1, qMat));
