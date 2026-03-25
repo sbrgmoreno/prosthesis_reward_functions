@@ -86,7 +86,25 @@ function results = analyze_encoder_logs(folderPath)
     results.folderPath = folderPath;
     results.numSamples = size(allEncRaw, 1);
     results.numMotors = nMotors;
-    results.perMotor = struct([]);
+    
+    emptyMotorRes = struct( ...
+        'motor', [], ...
+        'raw_min', [], ...
+        'raw_max', [], ...
+        'raw_p1', [], ...
+        'raw_p99', [], ...
+        'raw_mean', [], ...
+        'raw_std', [], ...
+        'adjust_min', [], ...
+        'adjust_max', [], ...
+        'adjust_mean', [], ...
+        'adjust_std', [], ...
+        'pct_clip_0', [], ...
+        'pct_clip_1', [], ...
+        'corr_adjust_vs_ref', [] ...
+    );
+    
+    results.perMotor = repmat(emptyMotorRes, 1, nMotors);
 
     fprintf("\nMuestras acumuladas totales: %d\n", results.numSamples);
 
@@ -103,33 +121,31 @@ function results = analyze_encoder_logs(folderPath)
         % Para correlación, alinear por filas válidas conjuntas
         validCorr = ~isnan(adj_i) & ~isnan(ref_i);
 
-        motorRes = struct();
+        motorRes = emptyMotorRes;
         motorRes.motor = i;
-
+        
         motorRes.raw_min = min(raw_valid);
         motorRes.raw_max = max(raw_valid);
         motorRes.raw_p1 = prctile(raw_valid, 1);
         motorRes.raw_p99 = prctile(raw_valid, 99);
         motorRes.raw_mean = mean(raw_valid);
         motorRes.raw_std = std(raw_valid);
-
+        
         motorRes.adjust_min = min(adj_valid);
         motorRes.adjust_max = max(adj_valid);
         motorRes.adjust_mean = mean(adj_valid);
         motorRes.adjust_std = std(adj_valid);
-
-        % Clip
+        
         tol = 1e-9;
         motorRes.pct_clip_0 = 100 * mean(adj_valid <= (0 + tol));
         motorRes.pct_clip_1 = 100 * mean(adj_valid >= (1 - tol));
-
-        % Correlación adjustEnc vs flexConverted
+        
         if sum(validCorr) >= 2
             motorRes.corr_adjust_vs_ref = corr(adj_i(validCorr), ref_i(validCorr), 'Rows', 'complete');
         else
             motorRes.corr_adjust_vs_ref = NaN;
         end
-
+        
         results.perMotor(i) = motorRes;
 
         % Mostrar resultados
