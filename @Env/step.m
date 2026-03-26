@@ -181,6 +181,10 @@ function [observation, reward, isDone, loggedSignals] = step(this, action)
     adjEnc = (encRawMat - encMin) ./ (encMax - encMin);
     adjEnc = max(0, min(1, adjEnc));
 
+    % Corrección de orientación (diagnóstico)
+    adjEnc(:,2) = 1 - adjEnc(:,2);
+    adjEnc(:,4) = 1 - adjEnc(:,4);
+
     this.adjustEnc = adjEnc;
 
     % ===== DEBUG de transformación de encoder =====
