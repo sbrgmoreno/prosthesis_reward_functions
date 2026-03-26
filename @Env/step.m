@@ -163,8 +163,23 @@ function [observation, reward, isDone, loggedSignals] = step(this, action)
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    this.flexConverted = this.flexJoined_scaler(reduceFlexDimension(this.flexData));
-    this.flexConverted = max(0, min(1, this.flexConverted));
+    %this.flexConverted = this.flexJoined_scaler(reduceFlexDimension(this.flexData));
+    %this.flexConverted = max(0, min(1, this.flexConverted));
+    % =========================================================
+    % Referencia desde glove (calibrada al espacio del encoder)
+    % =========================================================
+    flexRefRaw = this.flexJoined_scaler(reduceFlexDimension(this.flexData)); % Nx4
+    flexRefRaw = max(0, min(1, flexRefRaw));
+    
+    persistent qrefCalibLoaded
+    if isempty(qrefCalibLoaded)
+        S = load("qref_calibration.mat", "calib");
+        qrefCalibLoaded = S.calib;
+    end
+    
+    this.flexConverted = map_glove_to_encoder(flexRefRaw, qrefCalibLoaded);
+
+
 
     % ===== q desde encoder crudo normalizado por motor =====
     encRawMat = this.motorData;          % Nx4
