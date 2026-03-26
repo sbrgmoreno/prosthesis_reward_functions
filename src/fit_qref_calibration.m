@@ -4,18 +4,6 @@ function calib = fit_qref_calibration(allQ, allQref, maxLag)
 % - si conviene invertirlo
 % - mejor lag
 % - ajuste lineal y = a*x + b
-%
-% allQ    : Nx4 encoder normalizado
-% allQref : Nx4 glove normalizado
-%
-% Devuelve estructura calib con:
-%   sourceIdx
-%   invert
-%   lag
-%   a
-%   b
-%   corrBefore
-%   corrAfter
 
     if nargin < 3 || isempty(maxLag)
         maxLag = 20;
@@ -25,19 +13,32 @@ function calib = fit_qref_calibration(allQ, allQref, maxLag)
     lags = -maxLag:maxLag;
 
     calib = struct();
-    calib.perMotor = struct([]);
+
+    emptyBest = struct( ...
+        'targetMotor', [], ...
+        'sourceIdx', [], ...
+        'invert', [], ...
+        'lag', [], ...
+        'a', [], ...
+        'b', [], ...
+        'corrBefore', [], ...
+        'corrAfter', [] ...
+    );
+
+    calib.perMotor = repmat(emptyBest, 1, nMotors);
 
     for i = 1:nMotors
         bestScore = -Inf;
-        best = struct( ...
-            'targetMotor', i, ...
-            'sourceIdx', NaN, ...
-            'invert', false, ...
-            'lag', 0, ...
-            'a', 1, ...
-            'b', 0, ...
-            'corrBefore', NaN, ...
-            'corrAfter', NaN);
+
+        best = emptyBest;
+        best.targetMotor = i;
+        best.sourceIdx = NaN;
+        best.invert = false;
+        best.lag = 0;
+        best.a = 1;
+        best.b = 0;
+        best.corrBefore = NaN;
+        best.corrAfter = NaN;
 
         yFull = allQ(:,i);   % encoder target
 
@@ -80,7 +81,6 @@ function calib = fit_qref_calibration(allQ, allQref, maxLag)
                         c1 = -Inf;
                     end
 
-                    % Score: priorizar correlación post-calibración
                     score = c1;
 
                     if score > bestScore
@@ -118,7 +118,6 @@ function calib = fit_qref_calibration(allQ, allQref, maxLag)
 end
 
 function [xAligned, yAligned] = align_with_lag(x, y, lag)
-% Convención:
 % lag > 0  => x se retrasa respecto a y
 % lag < 0  => x se adelanta respecto a y
 
@@ -133,4 +132,3 @@ function [xAligned, yAligned] = align_with_lag(x, y, lag)
         yAligned = y;
     end
 end
-
