@@ -231,7 +231,7 @@ params.flexJoined_scale = @(x) x./[4092 2046 1023 2046];
 %%Para
 % Parameters that affect getObservationInfo()
 params.numEMGFeatures = 40;
-params.stateLength = 56; % 52; % 40 EMG + 4 q + 4 err + 4 dq 48; % 40 EMG + 4 q + 4 err %params.stateLength = 44; % num state features: EMG features + motors
+params.stateLength = 48 %EMG, q, dq; % 52; % 40 EMG + 4 q + 4 err + 4 dq 48; % 40 EMG + 4 q + 4 err %params.stateLength = 44; % num state features: EMG features + motors
 
 % -- Cinematic info: Encoder
 % max unreachable limits, uses the limit of the ring|little

@@ -1,4 +1,4 @@
-%%%%%%%%%%%%%%%%%%%%%%%%%%%% 56 INPUT [emg; q; q_ref; err; dq] %%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%% 48 INPUT [emg; q; dq] %%%%%%%%%%%
 function state = calculateState(this, emg, motorData)
 % calculateState returns the normalized state:
 % [EMG features; q; q_ref; err = q_ref - q; dq]
@@ -63,9 +63,9 @@ function state = calculateState(this, emg, motorData)
 
     % =========================================================
     % 6) estado final
-    % nuevo estado: [emg; q; q_ref; err; dq]
+    % nuevo estado: [emg; q; dq]
     % =========================================================
-    state = [emg; q; q_ref; err; dq];
+    state = [emg; q; dq];
 
     % =========================================================
     % 7) safety check

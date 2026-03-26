@@ -4121,42 +4121,188 @@ function [reward, rewardVector, action] = legacy_distanceRewarding(this, action)
 
 
 
-% % % % % % % % % % % % % % %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% % % % % % % % % % % % % % % %%%%%%%%%%%%%%%% VERSION 25 SIN q_ref %%%%%%%%%%%%%%%%
-% % % % % % % % % % % % % % %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% % % % % % %
-% % % % %function [reward, rewardVector, action] = reward_encoder_control_diagnostic_v1(this, action)
-% ============================================================
-% Reward de diagnostico SIN q_ref
-%
-% Objetivo:
-% - comprobar si el problema principal viene de q_ref
-% - premiar movimiento real del encoder
-% - penalizar inaccion
-% - penalizar cambios bruscos
-% - premiar control estable y util
-%
-% NOTA:
-% Esta reward NO aprende tracking de referencia.
-% Sirve para evaluar controlabilidad y calidad del estado.
-% ============================================================
+% % % % % % % % % % % % % % % %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% % % % % % % % % % % % % % % % %%%%%%%%%%%%%%%% VERSION 25 SIN q_ref %%%%%%%%%%%%%%%%
+% % % % % % % % % % % % % % % %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% % % % % % % %
+% % % % % %function [reward, rewardVector, action] = reward_encoder_control_diagnostic_v1(this, action)
+% % ============================================================
+% % Reward de diagnostico SIN q_ref
+% %
+% % Objetivo:
+% % - comprobar si el problema principal viene de q_ref
+% % - premiar movimiento real del encoder
+% % - penalizar inaccion
+% % - penalizar cambios bruscos
+% % - premiar control estable y util
+% %
+% % NOTA:
+% % Esta reward NO aprende tracking de referencia.
+% % Sirve para evaluar controlabilidad y calidad del estado.
+% % ============================================================
+% 
+%     persistent prevQ prevAction prevDq stableMotionCount
+% 
+%     % --------------------------------------------------------
+%     % Reset por episodio
+%     % --------------------------------------------------------
+%     if this.c == 1 || isempty(prevQ)
+%         prevQ = [];
+%         prevAction = zeros(size(action));
+%         prevDq = zeros(1,4);
+%         stableMotionCount = 0;
+%     end
+% 
+%     % --------------------------------------------------------
+%     % Estado actual
+%     % --------------------------------------------------------
+%     q = this.adjustEnc(end,:);   % 1x4, encoder normalizado actual
+% 
+%     if isempty(prevQ)
+%         dq = zeros(size(q));
+%     else
+%         dq = q - prevQ;
+%     end
+% 
+%     dqNorm = norm(dq);
+%     qMean = mean(q);
+% 
+%     % --------------------------------------------------------
+%     % 1) Premio por movimiento real del encoder
+%     %    Queremos que la accion produzca cambio real
+%     % --------------------------------------------------------
+%     r_motion = 2.0 * dqNorm;
+% 
+%     % --------------------------------------------------------
+%     % 2) Premio por movimiento moderado-util
+%     %    Penaliza tanto no moverse como cambios exagerados
+%     % --------------------------------------------------------
+%     targetMotion = 0.08;
+%     r_motion_band = -1.5 * abs(dqNorm - targetMotion);
+% 
+%     % --------------------------------------------------------
+%     % 3) Premio por continuidad/suavidad del movimiento
+%     %    Si dq actual se parece al anterior, favorece estabilidad
+%     % --------------------------------------------------------
+%     dqChange = dq - prevDq;
+%     r_smooth_motion = -0.8 * norm(dqChange);
+% 
+%     % --------------------------------------------------------
+%     % 4) Penalizacion por inaccion total
+%     % --------------------------------------------------------
+%     inactivityPenalty = 0;
+%     if all(action == 0)
+%         inactivityPenalty = -0.08;
+%     end
+% 
+%     if dqNorm < 1e-3
+%         inactivityPenalty = inactivityPenalty - 0.12;
+%     end
+% 
+%     % --------------------------------------------------------
+%     % 5) Penalizacion por accion excesiva
+%     % --------------------------------------------------------
+%     activeMotors = sum(action ~= 0);
+%     actionPenalty = -0.015 * activeMotors;
+% 
+%     % --------------------------------------------------------
+%     % 6) Penalizacion por cambio brusco de accion
+%     % --------------------------------------------------------
+%     actionChangePenalty = -0.025 * mean((action - prevAction).^2);
+% 
+%     % --------------------------------------------------------
+%     % 7) Premio por movimiento sostenido util
+%     % --------------------------------------------------------
+%     stableBonus = 0;
+%     if dqNorm > 0.02 && dqNorm < 0.20
+%         stableMotionCount = stableMotionCount + 1;
+%         stableBonus = 0.03 * min(stableMotionCount, 10);
+%     else
+%         stableMotionCount = 0;
+%     end
+% 
+%     % --------------------------------------------------------
+%     % 8) Penalizacion por saturacion prolongada del estado
+%     %    Evita quedarse pegado cerca de 0 o 1 sin dinamica
+%     % --------------------------------------------------------
+%     nearLower = mean(q < 0.05);
+%     nearUpper = mean(q > 0.95);
+% 
+%     saturationPenalty = 0;
+%     if dqNorm < 0.01
+%         saturationPenalty = -0.10 * (nearLower + nearUpper);
+%     end
+% 
+%     % --------------------------------------------------------
+%     % 9) Penalizacion por oscilacion muy brusca
+%     % --------------------------------------------------------
+%     oscillationPenalty = 0;
+%     if ~isempty(prevQ)
+%         if sign(sum(dq)) ~= sign(sum(prevDq)) && dqNorm > 0.05
+%             oscillationPenalty = -0.05;
+%         end
+%     end
+% 
+%     % --------------------------------------------------------
+%     % 10) Reward total
+%     % --------------------------------------------------------
+%     reward = ...
+%         r_motion + ...
+%         r_motion_band + ...
+%         r_smooth_motion + ...
+%         inactivityPenalty + ...
+%         actionPenalty + ...
+%         actionChangePenalty + ...
+%         stableBonus + ...
+%         saturationPenalty + ...
+%         oscillationPenalty;
+% 
+%     % --------------------------------------------------------
+%     % Reward vector compatible
+%     % --------------------------------------------------------
+%     rewardVector = reward * ones(1, length(action));
+% 
+%     % --------------------------------------------------------
+%     % Actualizar memoria
+%     % --------------------------------------------------------
+%     prevQ = q;
+%     prevAction = action;
+%     prevDq = dq;
+% 
+%     % --------------------------------------------------------
+%     % Debug opcional
+%     % --------------------------------------------------------
+%     if this.verbose && (this.c == 1 || mod(this.c,5) == 1)
+%         fprintf(['[RW ENC DIAG] step=%d | dqNorm=%.4f | qMean=%.4f | ' ...
+%                  'r_motion=%.4f | r_band=%.4f | r_smooth=%.4f | ' ...
+%                  'inactive=%.4f | actPen=%.4f | dActPen=%.4f | ' ...
+%                  'stable=%.4f | sat=%.4f | osc=%.4f | total=%.4f\n'], ...
+%                  this.c, dqNorm, qMean, ...
+%                  r_motion, r_motion_band, r_smooth_motion, ...
+%                  inactivityPenalty, actionPenalty, actionChangePenalty, ...
+%                  stableBonus, saturationPenalty, oscillationPenalty, reward);
+%     end
+% end
 
-    persistent prevQ prevAction prevDq stableMotionCount
 
-    % --------------------------------------------------------
-    % Reset por episodio
-    % --------------------------------------------------------
+
+
+
+% % % % % % % % % % % % % % % %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% % % % % % % % % % % % % % % % %%%%%%%%%%%%%%%% VERSION 26 SIN q_ref %%%%%%%%%%%%%%%%
+% % % % % % % % % % % % % % % %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% % % % % % % %
+% % % % % %function [reward, rewardVector, action] = reward_encoder_control_v2(this, action)
+
+    persistent prevQ prevAction actionHistory
+
     if this.c == 1 || isempty(prevQ)
         prevQ = [];
         prevAction = zeros(size(action));
-        prevDq = zeros(1,4);
-        stableMotionCount = 0;
+        actionHistory = [];
     end
 
-    % --------------------------------------------------------
-    % Estado actual
-    % --------------------------------------------------------
-    q = this.adjustEnc(end,:);   % 1x4, encoder normalizado actual
+    q = this.adjustEnc(end,:);
 
     if isempty(prevQ)
         dq = zeros(size(q));
@@ -4165,121 +4311,92 @@ function [reward, rewardVector, action] = legacy_distanceRewarding(this, action)
     end
 
     dqNorm = norm(dq);
-    qMean = mean(q);
 
-    % --------------------------------------------------------
-    % 1) Premio por movimiento real del encoder
-    %    Queremos que la accion produzca cambio real
-    % --------------------------------------------------------
-    r_motion = 2.0 * dqNorm;
+    % =========================================================
+    % 1) MOVIMIENTO BASE
+    % =========================================================
+    r_motion = 2.5 * dqNorm;
 
-    % --------------------------------------------------------
-    % 2) Premio por movimiento moderado-util
-    %    Penaliza tanto no moverse como cambios exagerados
-    % --------------------------------------------------------
-    targetMotion = 0.08;
-    r_motion_band = -1.5 * abs(dqNorm - targetMotion);
-
-    % --------------------------------------------------------
-    % 3) Premio por continuidad/suavidad del movimiento
-    %    Si dq actual se parece al anterior, favorece estabilidad
-    % --------------------------------------------------------
-    dqChange = dq - prevDq;
-    r_smooth_motion = -0.8 * norm(dqChange);
-
-    % --------------------------------------------------------
-    % 4) Penalizacion por inaccion total
-    % --------------------------------------------------------
-    inactivityPenalty = 0;
-    if all(action == 0)
-        inactivityPenalty = -0.08;
-    end
-
-    if dqNorm < 1e-3
-        inactivityPenalty = inactivityPenalty - 0.12;
-    end
-
-    % --------------------------------------------------------
-    % 5) Penalizacion por accion excesiva
-    % --------------------------------------------------------
-    activeMotors = sum(action ~= 0);
-    actionPenalty = -0.015 * activeMotors;
-
-    % --------------------------------------------------------
-    % 6) Penalizacion por cambio brusco de accion
-    % --------------------------------------------------------
-    actionChangePenalty = -0.025 * mean((action - prevAction).^2);
-
-    % --------------------------------------------------------
-    % 7) Premio por movimiento sostenido util
-    % --------------------------------------------------------
-    stableBonus = 0;
-    if dqNorm > 0.02 && dqNorm < 0.20
-        stableMotionCount = stableMotionCount + 1;
-        stableBonus = 0.03 * min(stableMotionCount, 10);
-    else
-        stableMotionCount = 0;
-    end
-
-    % --------------------------------------------------------
-    % 8) Penalizacion por saturacion prolongada del estado
-    %    Evita quedarse pegado cerca de 0 o 1 sin dinamica
-    % --------------------------------------------------------
-    nearLower = mean(q < 0.05);
-    nearUpper = mean(q > 0.95);
-
-    saturationPenalty = 0;
-    if dqNorm < 0.01
-        saturationPenalty = -0.10 * (nearLower + nearUpper);
-    end
-
-    % --------------------------------------------------------
-    % 9) Penalizacion por oscilacion muy brusca
-    % --------------------------------------------------------
-    oscillationPenalty = 0;
-    if ~isempty(prevQ)
-        if sign(sum(dq)) ~= sign(sum(prevDq)) && dqNorm > 0.05
-            oscillationPenalty = -0.05;
+    % =========================================================
+    % 2) DIRECCIONALIDAD (CLAVE NUEVA)
+    % =========================================================
+    dirReward = 0;
+    for i = 1:length(action)
+        if action(i) ~= 0
+            dirReward = dirReward + action(i) * dq(i);
         end
     end
 
-    % --------------------------------------------------------
-    % 10) Reward total
-    % --------------------------------------------------------
+    r_direction = 3.0 * dirReward;
+
+    % =========================================================
+    % 3) BANDA DE MOVIMIENTO ÓPTIMA
+    % =========================================================
+    target = 0.08;
+    r_band = -1.5 * abs(dqNorm - target);
+
+    % =========================================================
+    % 4) SUAVIDAD
+    % =========================================================
+    if isempty(prevQ)
+        r_smooth = 0;
+    else
+        dqChange = dq - (prevQ - prevQ); % simplificado
+        r_smooth = -0.8 * norm(dqChange);
+    end
+
+    % =========================================================
+    % 5) PENALIZAR INACCIÓN
+    % =========================================================
+    inactivity = 0;
+    if all(action == 0)
+        inactivity = -0.1;
+    end
+
+    if dqNorm < 1e-3
+        inactivity = inactivity - 0.1;
+    end
+
+    % =========================================================
+    % 6) PENALIZAR USO REPETIDO DE ACCIONES (ANTI-COLLAPSE)
+    % =========================================================
+    actionHistory = [actionHistory; action];
+
+    if size(actionHistory,1) > 20
+        actionHistory(1,:) = [];
+    end
+
+    uniqueActions = unique(actionHistory, 'rows');
+    diversityRatio = size(uniqueActions,1) / size(actionHistory,1);
+
+    r_diversity = 0.5 * diversityRatio;
+
+    % =========================================================
+    % 7) PENALIZAR CAMBIOS BRUSCOS
+    % =========================================================
+    r_action_change = -0.03 * mean((action - prevAction).^2);
+
+    % =========================================================
+    % 8) REWARD TOTAL
+    % =========================================================
     reward = ...
         r_motion + ...
-        r_motion_band + ...
-        r_smooth_motion + ...
-        inactivityPenalty + ...
-        actionPenalty + ...
-        actionChangePenalty + ...
-        stableBonus + ...
-        saturationPenalty + ...
-        oscillationPenalty;
+        r_direction + ...
+        r_band + ...
+        r_smooth + ...
+        inactivity + ...
+        r_diversity + ...
+        r_action_change;
 
-    % --------------------------------------------------------
-    % Reward vector compatible
-    % --------------------------------------------------------
     rewardVector = reward * ones(1, length(action));
 
-    % --------------------------------------------------------
-    % Actualizar memoria
-    % --------------------------------------------------------
+    % actualizar memoria
     prevQ = q;
     prevAction = action;
-    prevDq = dq;
 
-    % --------------------------------------------------------
-    % Debug opcional
-    % --------------------------------------------------------
-    if this.verbose && (this.c == 1 || mod(this.c,5) == 1)
-        fprintf(['[RW ENC DIAG] step=%d | dqNorm=%.4f | qMean=%.4f | ' ...
-                 'r_motion=%.4f | r_band=%.4f | r_smooth=%.4f | ' ...
-                 'inactive=%.4f | actPen=%.4f | dActPen=%.4f | ' ...
-                 'stable=%.4f | sat=%.4f | osc=%.4f | total=%.4f\n'], ...
-                 this.c, dqNorm, qMean, ...
-                 r_motion, r_motion_band, r_smooth_motion, ...
-                 inactivityPenalty, actionPenalty, actionChangePenalty, ...
-                 stableBonus, saturationPenalty, oscillationPenalty, reward);
+    % debug
+    if this.verbose && mod(this.c,5)==1
+        fprintf('[RW V2] dq=%.4f dir=%.4f div=%.3f total=%.4f\n', ...
+            dqNorm, dirReward, diversityRatio, reward);
     end
 end

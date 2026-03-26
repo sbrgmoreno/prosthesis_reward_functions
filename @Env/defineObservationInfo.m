@@ -5,8 +5,6 @@ function obsInfo = defineObservationInfo()
 % The observation is defined as the concatenation of:
 %   - EMG features
 %   - current prosthesis state q
-%   - reference state q_ref
-%   - tracking error err = q_ref - q
 %   - delta state dq = q_t - q_(t-1)
 
 %% aux vars
@@ -25,14 +23,6 @@ EMGFeaturesMax = inf;
 qMin = 0;
 qMax = 1;
 
-% q_ref normalized
-qRefMin = 0;
-qRefMax = 1;
-
-% err = q_ref - q, assuming both normalized in [0,1]
-errMin = -1;
-errMax = 1;
-
 % dq = q_t - q_(t-1), with q in [0,1]
 dqMin = -1;
 dqMax = 1;
@@ -44,21 +34,17 @@ obsInfo = rlNumericSpec([stateLength 1]); % col-wise
 obsInfo.LowerLimit = [ ...
     EMGFeaturesMin * ones(numEMGFeatures, 1); ...
     qMin    * ones(numMotors, 1); ...
-    qRefMin * ones(numMotors, 1); ...
-    errMin  * ones(numMotors, 1); ...
     dqMin   * ones(numMotors, 1)];
 
 obsInfo.UpperLimit = [ ...
     EMGFeaturesMax * ones(numEMGFeatures, 1); ...
     qMax    * ones(numMotors, 1); ...
-    qRefMax * ones(numMotors, 1); ...
-    errMax  * ones(numMotors, 1); ...
     dqMax   * ones(numMotors, 1)];
 
 obsInfo.Name = 'prosthesis_state';
 obsInfo.Description = sprintf( ...
-    'State defined with %d EMG features, %d encoder states, %d reference states, %d tracking errors, and %d dq values', ...
-    numEMGFeatures, numMotors, numMotors, numMotors, numMotors);
+    'State defined with %d EMG features, %d encoder states, and %d dq values', ...
+    numEMGFeatures, numMotors, numMotors);
 
 % Optional safety check
 assert(all(size(obsInfo.LowerLimit) == [stateLength 1]), ...
