@@ -4409,103 +4409,258 @@ function [reward, rewardVector, action] = legacy_distanceRewarding(this, action)
 % % % % % % % % % % % % % % % % %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % % % % % % % % %
 % % % % % % %function [reward, rewardVector, action] = reward_encoder_control_v3(this, action)
-% ============================================================
-% Reward v3: directional control without relying on q_ref
-% Compatible with rewardFunctionSelector
-% Returns: reward, rewardVector, action
-% ============================================================
+% % ============================================================
+% % Reward v3: directional control without relying on q_ref
+% % Compatible with rewardFunctionSelector
+% % Returns: reward, rewardVector, action
+% % ============================================================
+% 
+%     persistent prevQ prevAction repeatCount prevMoveQuality
+% 
+%     if isempty(prevQ) || this.c <= 1
+%         q = getCurrentQ(this);
+%         prevQ = q;
+%         prevAction = zeros(size(action));
+%         repeatCount = 0;
+%         prevMoveQuality = 0;
+% 
+%         reward = 0;
+%         rewardVector = zeros(1,6);
+%         return;
+%     end
+% 
+%     q = getCurrentQ(this);
+%     a = action(:);
+%     dq = q - prevQ;
+%     effectNorm = norm(dq, 2);
+% 
+%     moveReward = 2.0 * tanh(6.0 * effectNorm);
+% 
+%     dirScore = 0;
+%     for i = 1:length(a)
+%         if a(i) == 0
+%             dirScore = dirScore + max(0, 1 - abs(dq(i))/0.03);
+%         else
+%             dirScore = dirScore + sign(a(i)) * signWithDeadzone(dq(i), 0.005);
+%         end
+%     end
+%     dirScore = dirScore / length(a);
+%     dirReward = 1.5 * dirScore;
+% 
+%     moveQuality = 0.6 * effectNorm + 0.4 * max(dirScore, -1);
+%     dProgress = moveQuality - prevMoveQuality;
+%     progressReward = 2.5 * tanh(8.0 * dProgress);
+% 
+%     if effectNorm < 0.015
+%         deadPenalty = -2.0;
+%     elseif effectNorm < 0.03
+%         deadPenalty = -0.8;
+%     else
+%         deadPenalty = 0;
+%     end
+% 
+%     if isequal(a', prevAction)
+%         repeatCount = repeatCount + 1;
+%     else
+%         repeatCount = 0;
+%     end
+% 
+%     if repeatCount >= 3
+%         repeatPenalty = -0.15 * min(repeatCount - 2, 10);
+%     else
+%         repeatPenalty = 0;
+%     end
+% 
+%     smoothPenalty = -0.8 * max(0, effectNorm - 0.18);
+% 
+%     if effectNorm > 0.02 && dirScore < 0
+%         regressionPenalty = -1.5 * abs(dirScore);
+%     else
+%         regressionPenalty = 0;
+%     end
+% 
+%     reward = moveReward + dirReward + progressReward + ...
+%              deadPenalty + repeatPenalty + smoothPenalty + regressionPenalty;
+% 
+%     reward = max(min(reward, 6), -6);
+% 
+%     rewardVector = [moveReward, dirReward, progressReward, ...
+%                     deadPenalty, repeatPenalty, smoothPenalty + regressionPenalty];
+% 
+%     prevQ = q;
+%     prevAction = a';
+%     prevMoveQuality = moveQuality;
+% end
+% 
+% function q = getCurrentQ(this)
+%     if isprop(this, 'adjustEnc') && ~isempty(this.adjustEnc)
+%         q = this.adjustEnc(end,:)';
+%     elseif isprop(this, 'qLog') && ~isempty(this.qLog)
+%         q = this.qLog(end,:)';
+%     else
+%         error('reward_encoder_control_v3: No normalized q source found.');
+%     end
+% end
+% 
+% function s = signWithDeadzone(x, thr)
+%     if abs(x) < thr
+%         s = 0;
+%     else
+%         s = sign(x);
+%     end
+% end
 
-    persistent prevQ prevAction repeatCount prevMoveQuality
 
+
+
+% % % % % % % % % % % % % % % % %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% % % % % % % % % % % % % % % % % %%%%%%%%%%%%%%%% VERSION 28 mejora a version 26 %%%%%%%%%%%%%%%%
+% % % % % % % % % % % % % % % % %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% % % % % % % % %
+% % % % % % function [reward, rewardVector, action] = reward_encoder_control_v4(this, action)
+% ============================================================
+% Reward v4: simple directional encoder control
+% ============================================================
+% Design goals:
+% - keep the stability of v2
+% - avoid the self-reinforcing progress term from v3
+% - softly encourage action-effect consistency
+% - discourage dead-zone and repeated-action collapse
+%
+% Returns:
+%   reward       : scalar
+%   rewardVector : diagnostic components
+%   action       : passthrough action
+%
+% Assumptions:
+% - this.adjustEnc(end,:) contains normalized q in [0,1]
+% - action is 1x4 in {-1,0,1}
+% - this.c is step index inside episode
+
+    persistent prevQ prevAction repeatCount
+
+    % -------------------------
+    % Reset at episode start
+    % -------------------------
     if isempty(prevQ) || this.c <= 1
         q = getCurrentQ(this);
         prevQ = q;
-        prevAction = zeros(size(action));
+        prevAction = action;
         repeatCount = 0;
-        prevMoveQuality = 0;
 
         reward = 0;
-        rewardVector = zeros(1,6);
+        rewardVector = zeros(1,5);
         return;
     end
 
-    q = getCurrentQ(this);
-    a = action(:);
-    dq = q - prevQ;
+    % -------------------------
+    % Current state
+    % -------------------------
+    q = getCurrentQ(this);      % 4x1
+    a = action(:);              % 4x1
+    dq = q - prevQ;             % observed effect
     effectNorm = norm(dq, 2);
 
-    moveReward = 2.0 * tanh(6.0 * effectNorm);
+    % =========================================================
+    % 1) EFFECT REWARD
+    % =========================================================
+    % Reward real motion, but with soft saturation
+    effectReward = 1.8 * tanh(7 * effectNorm);
 
-    dirScore = 0;
-    for i = 1:length(a)
-        if a(i) == 0
-            dirScore = dirScore + max(0, 1 - abs(dq(i))/0.03);
-        else
-            dirScore = dirScore + sign(a(i)) * signWithDeadzone(dq(i), 0.005);
-        end
+    % =========================================================
+    % 2) DIRECTION REWARD
+    % =========================================================
+    % Only count motors that are actively commanded (+1 or -1)
+    activeMask = abs(a) > 0;
+    nActive = sum(activeMask);
+
+    if nActive > 0
+        dirTerms = sign(a(activeMask)) .* signWithDeadzoneVec(dq(activeMask), 0.004);
+        dirScore = mean(dirTerms);   % approx in [-1,1]
+    else
+        dirScore = 0;
     end
-    dirScore = dirScore / length(a);
-    dirReward = 1.5 * dirScore;
 
-    moveQuality = 0.6 * effectNorm + 0.4 * max(dirScore, -1);
-    dProgress = moveQuality - prevMoveQuality;
-    progressReward = 2.5 * tanh(8.0 * dProgress);
+    directionReward = 2.2 * dirScore;
 
-    if effectNorm < 0.015
-        deadPenalty = -2.0;
-    elseif effectNorm < 0.03
-        deadPenalty = -0.8;
+    % =========================================================
+    % 3) DEAD-ZONE PENALTY
+    % =========================================================
+    if effectNorm < 0.012
+        deadPenalty = -1.8;
+    elseif effectNorm < 0.025
+        deadPenalty = -0.6;
     else
         deadPenalty = 0;
     end
 
-    if isequal(a', prevAction)
+    % =========================================================
+    % 4) REPEATED ACTION PENALTY
+    % =========================================================
+    if isequal(action, prevAction)
         repeatCount = repeatCount + 1;
     else
         repeatCount = 0;
     end
 
-    if repeatCount >= 3
-        repeatPenalty = -0.15 * min(repeatCount - 2, 10);
+    if repeatCount >= 4
+        repeatPenalty = -0.10 * min(repeatCount - 3, 12);
     else
         repeatPenalty = 0;
     end
 
-    smoothPenalty = -0.8 * max(0, effectNorm - 0.18);
+    % =========================================================
+    % 5) SMOOTHNESS PENALTY
+    % =========================================================
+    % Penalize only very large movements
+    smoothPenalty = -0.5 * max(0, effectNorm - 0.16);
 
+    % =========================================================
+    % 6) MISMATCH PENALTY
+    % =========================================================
+    % Extra penalty when there is movement but opposite direction
     if effectNorm > 0.02 && dirScore < 0
-        regressionPenalty = -1.5 * abs(dirScore);
+        mismatchPenalty = -1.2 * abs(dirScore);
     else
-        regressionPenalty = 0;
+        mismatchPenalty = 0;
     end
 
-    reward = moveReward + dirReward + progressReward + ...
-             deadPenalty + repeatPenalty + smoothPenalty + regressionPenalty;
+    % =========================================================
+    % FINAL REWARD
+    % =========================================================
+    reward = effectReward + directionReward + deadPenalty + ...
+             repeatPenalty + smoothPenalty + mismatchPenalty;
 
-    reward = max(min(reward, 6), -6);
+    % Stability clip
+    reward = max(min(reward, 5), -5);
 
-    rewardVector = [moveReward, dirReward, progressReward, ...
-                    deadPenalty, repeatPenalty, smoothPenalty + regressionPenalty];
+    % Diagnostic vector
+    rewardVector = [effectReward, directionReward, deadPenalty, ...
+                    repeatPenalty, smoothPenalty + mismatchPenalty];
 
+    % Update persistent state
     prevQ = q;
-    prevAction = a';
-    prevMoveQuality = moveQuality;
+    prevAction = action;
 end
 
+% ============================================================
+% Helper: get normalized q
+% ============================================================
 function q = getCurrentQ(this)
     if isprop(this, 'adjustEnc') && ~isempty(this.adjustEnc)
         q = this.adjustEnc(end,:)';
     elseif isprop(this, 'qLog') && ~isempty(this.qLog)
         q = this.qLog(end,:)';
     else
-        error('reward_encoder_control_v3: No normalized q source found.');
+        error('reward_encoder_control_v4: No normalized q source found.');
     end
 end
 
-function s = signWithDeadzone(x, thr)
-    if abs(x) < thr
-        s = 0;
-    else
-        s = sign(x);
-    end
+% ============================================================
+% Helper: sign with deadzone for vectors
+% ============================================================
+function s = signWithDeadzoneVec(x, thr)
+    s = zeros(size(x));
+    s(x > thr) = 1;
+    s(x < -thr) = -1;
 end
