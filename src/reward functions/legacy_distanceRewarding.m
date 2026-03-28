@@ -4408,87 +4408,49 @@ function [reward, rewardVector, action] = legacy_distanceRewarding(this, action)
 % % % % % % % % % % % % % % % % % %%%%%%%%%%%%%%%% VERSION 27 no colapsa la politica %%%%%%%%%%%%%%%%
 % % % % % % % % % % % % % % % % %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % % % % % % % % %
-% % % % % % %function reward = reward_encoder_control_v3(this, action)
+% % % % % % %function [reward, rewardVector, action] = reward_encoder_control_v3(this, action)
 % ============================================================
 % Reward v3: directional control without relying on q_ref
+% Compatible with rewardFunctionSelector
+% Returns: reward, rewardVector, action
 % ============================================================
-% Main goals:
-% 1) Reward real movement
-% 2) Reward movement aligned with commanded action
-% 3) Reward progress with respect to previous step
-% 4) Penalize dead-zone / inactivity
-% 5) Penalize action repetition collapse
-% 6) Penalize overly abrupt motion
-%
-% Assumptions:
-% - this.adjustEnc(end,:) contains normalized q in [0,1]
-% - action is a 1x4 vector in {-1,0,1} per motor
-% - this.c is the step index within the episode
-%
-% Compatible with state = [emg; q; dq]
 
-    persistent prevQ prevAction repeatCount prevEffectNorm prevMoveQuality
+    persistent prevQ prevAction repeatCount prevMoveQuality
 
-    % -------------------------
-    % Episode reset
-    % -------------------------
     if isempty(prevQ) || this.c <= 1
         q = getCurrentQ(this);
         prevQ = q;
         prevAction = zeros(size(action));
         repeatCount = 0;
-        prevEffectNorm = 0;
         prevMoveQuality = 0;
+
         reward = 0;
+        rewardVector = zeros(1,6);
         return;
     end
 
-    % -------------------------
-    % Current state
-    % -------------------------
-    q = getCurrentQ(this);              % column vector 4x1
-    a = action(:);                      % column vector 4x1
-    dq = q - prevQ;                     % observed motion
-    effectNorm = norm(dq, 2);           % total movement magnitude
+    q = getCurrentQ(this);
+    a = action(:);
+    dq = q - prevQ;
+    effectNorm = norm(dq, 2);
 
-    % -------------------------
-    % Term 1: reward movement
-    % -------------------------
-    % Reward moving, but softly saturate to avoid encouraging wild motion
     moveReward = 2.0 * tanh(6.0 * effectNorm);
 
-    % -------------------------
-    % Term 2: direction agreement
-    % -------------------------
-    % If action says +1 and dq is positive => good
-    % If action says -1 and dq is negative => good
-    % If action says 0 and dq is near zero => acceptable
     dirScore = 0;
     for i = 1:length(a)
         if a(i) == 0
-            % reward staying still only if joint actually remains still
             dirScore = dirScore + max(0, 1 - abs(dq(i))/0.03);
         else
             dirScore = dirScore + sign(a(i)) * signWithDeadzone(dq(i), 0.005);
         end
     end
-    dirScore = dirScore / length(a);    % normalize to approx [-1,1]
+    dirScore = dirScore / length(a);
     dirReward = 1.5 * dirScore;
 
-    % -------------------------
-    % Term 3: progress vs previous step
-    % -------------------------
-    % Since we removed q_ref from the reward core, we define "progress"
-    % as producing motion with better quality than the previous step:
-    % - more useful movement
-    % - better alignment
     moveQuality = 0.6 * effectNorm + 0.4 * max(dirScore, -1);
     dProgress = moveQuality - prevMoveQuality;
     progressReward = 2.5 * tanh(8.0 * dProgress);
 
-    % -------------------------
-    % Term 4: dead-zone penalty
-    % -------------------------
     if effectNorm < 0.015
         deadPenalty = -2.0;
     elseif effectNorm < 0.03
@@ -4497,10 +4459,7 @@ function [reward, rewardVector, action] = legacy_distanceRewarding(this, action)
         deadPenalty = 0;
     end
 
-    % -------------------------
-    % Term 5: repeated action collapse penalty
-    % -------------------------
-    if isequal(a', prevAction')
+    if isequal(a', prevAction)
         repeatCount = repeatCount + 1;
     else
         repeatCount = 0;
@@ -4512,44 +4471,27 @@ function [reward, rewardVector, action] = legacy_distanceRewarding(this, action)
         repeatPenalty = 0;
     end
 
-    % -------------------------
-    % Term 6: overshoot / abrupt motion penalty
-    % -------------------------
-    % Penalize excessive movement jumps
     smoothPenalty = -0.8 * max(0, effectNorm - 0.18);
 
-    % -------------------------
-    % Term 7: regression penalty
-    % -------------------------
-    % If action-direction consistency is poor AND movement happened,
-    % penalize harder than v2
     if effectNorm > 0.02 && dirScore < 0
         regressionPenalty = -1.5 * abs(dirScore);
     else
         regressionPenalty = 0;
     end
 
-    % -------------------------
-    % Final reward
-    % -------------------------
     reward = moveReward + dirReward + progressReward + ...
              deadPenalty + repeatPenalty + smoothPenalty + regressionPenalty;
 
-    % Optional clip for training stability
     reward = max(min(reward, 6), -6);
 
-    % -------------------------
-    % Update persistent variables
-    % -------------------------
+    rewardVector = [moveReward, dirReward, progressReward, ...
+                    deadPenalty, repeatPenalty, smoothPenalty + regressionPenalty];
+
     prevQ = q;
     prevAction = a';
-    prevEffectNorm = effectNorm;
     prevMoveQuality = moveQuality;
 end
 
-% ============================================================
-% Helper: get current q
-% ============================================================
 function q = getCurrentQ(this)
     if isprop(this, 'adjustEnc') && ~isempty(this.adjustEnc)
         q = this.adjustEnc(end,:)';
@@ -4560,9 +4502,6 @@ function q = getCurrentQ(this)
     end
 end
 
-% ============================================================
-% Helper: sign with deadzone
-% ============================================================
 function s = signWithDeadzone(x, thr)
     if abs(x) < thr
         s = 0;
