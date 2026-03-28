@@ -4288,115 +4288,285 @@ function [reward, rewardVector, action] = legacy_distanceRewarding(this, action)
 
 
 
-% % % % % % % % % % % % % % % %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% % % % % % % % % % % % % % % % %%%%%%%%%%%%%%%% VERSION 26 SIN q_ref %%%%%%%%%%%%%%%%
-% % % % % % % % % % % % % % % %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% % % % % % % %
-% % % % % %function [reward, rewardVector, action] = reward_encoder_control_v2(this, action)
+% % % % % % % % % % % % % % % % %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% % % % % % % % % % % % % % % % % %%%%%%%%%%%%%%%% VERSION 26 SIN q_ref %%%%%%%%%%%%%%%%
+% % % % % % % % % % % % % % % % %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% % % % % % % % %
+% % % % % % %function [reward, rewardVector, action] = reward_encoder_control_v2(this, action)
+% 
+%     persistent prevQ prevAction actionHistory
+% 
+%     if this.c == 1 || isempty(prevQ)
+%         prevQ = [];
+%         prevAction = zeros(size(action));
+%         actionHistory = [];
+%     end
+% 
+%     q = this.adjustEnc(end,:);
+% 
+%     if isempty(prevQ)
+%         dq = zeros(size(q));
+%     else
+%         dq = q - prevQ;
+%     end
+% 
+%     dqNorm = norm(dq);
+% 
+%     % =========================================================
+%     % 1) MOVIMIENTO BASE
+%     % =========================================================
+%     r_motion = 2.5 * dqNorm;
+% 
+%     % =========================================================
+%     % 2) DIRECCIONALIDAD (CLAVE NUEVA)
+%     % =========================================================
+%     dirReward = 0;
+%     for i = 1:length(action)
+%         if action(i) ~= 0
+%             dirReward = dirReward + action(i) * dq(i);
+%         end
+%     end
+% 
+%     r_direction = 3.0 * dirReward;
+% 
+%     % =========================================================
+%     % 3) BANDA DE MOVIMIENTO ÓPTIMA
+%     % =========================================================
+%     target = 0.08;
+%     r_band = -1.5 * abs(dqNorm - target);
+% 
+%     % =========================================================
+%     % 4) SUAVIDAD
+%     % =========================================================
+%     if isempty(prevQ)
+%         r_smooth = 0;
+%     else
+%         dqChange = dq - (prevQ - prevQ); % simplificado
+%         r_smooth = -0.8 * norm(dqChange);
+%     end
+% 
+%     % =========================================================
+%     % 5) PENALIZAR INACCIÓN
+%     % =========================================================
+%     inactivity = 0;
+%     if all(action == 0)
+%         inactivity = -0.1;
+%     end
+% 
+%     if dqNorm < 1e-3
+%         inactivity = inactivity - 0.1;
+%     end
+% 
+%     % =========================================================
+%     % 6) PENALIZAR USO REPETIDO DE ACCIONES (ANTI-COLLAPSE)
+%     % =========================================================
+%     actionHistory = [actionHistory; action];
+% 
+%     if size(actionHistory,1) > 20
+%         actionHistory(1,:) = [];
+%     end
+% 
+%     uniqueActions = unique(actionHistory, 'rows');
+%     diversityRatio = size(uniqueActions,1) / size(actionHistory,1);
+% 
+%     r_diversity = 0.5 * diversityRatio;
+% 
+%     % =========================================================
+%     % 7) PENALIZAR CAMBIOS BRUSCOS
+%     % =========================================================
+%     r_action_change = -0.03 * mean((action - prevAction).^2);
+% 
+%     % =========================================================
+%     % 8) REWARD TOTAL
+%     % =========================================================
+%     reward = ...
+%         r_motion + ...
+%         r_direction + ...
+%         r_band + ...
+%         r_smooth + ...
+%         inactivity + ...
+%         r_diversity + ...
+%         r_action_change;
+% 
+%     rewardVector = reward * ones(1, length(action));
+% 
+%     % actualizar memoria
+%     prevQ = q;
+%     prevAction = action;
+% 
+%     % debug
+%     if this.verbose && mod(this.c,5)==1
+%         fprintf('[RW V2] dq=%.4f dir=%.4f div=%.3f total=%.4f\n', ...
+%             dqNorm, dirReward, diversityRatio, reward);
+%     end
+% end
 
-    persistent prevQ prevAction actionHistory
 
-    if this.c == 1 || isempty(prevQ)
-        prevQ = [];
+
+
+% % % % % % % % % % % % % % % % %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% % % % % % % % % % % % % % % % % %%%%%%%%%%%%%%%% VERSION 27 no colapsa la politica %%%%%%%%%%%%%%%%
+% % % % % % % % % % % % % % % % %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% % % % % % % % %
+% % % % % % %function reward = reward_encoder_control_v3(this, action)
+% ============================================================
+% Reward v3: directional control without relying on q_ref
+% ============================================================
+% Main goals:
+% 1) Reward real movement
+% 2) Reward movement aligned with commanded action
+% 3) Reward progress with respect to previous step
+% 4) Penalize dead-zone / inactivity
+% 5) Penalize action repetition collapse
+% 6) Penalize overly abrupt motion
+%
+% Assumptions:
+% - this.adjustEnc(end,:) contains normalized q in [0,1]
+% - action is a 1x4 vector in {-1,0,1} per motor
+% - this.c is the step index within the episode
+%
+% Compatible with state = [emg; q; dq]
+
+    persistent prevQ prevAction repeatCount prevEffectNorm prevMoveQuality
+
+    % -------------------------
+    % Episode reset
+    % -------------------------
+    if isempty(prevQ) || this.c <= 1
+        q = getCurrentQ(this);
+        prevQ = q;
         prevAction = zeros(size(action));
-        actionHistory = [];
+        repeatCount = 0;
+        prevEffectNorm = 0;
+        prevMoveQuality = 0;
+        reward = 0;
+        return;
     end
 
-    q = this.adjustEnc(end,:);
+    % -------------------------
+    % Current state
+    % -------------------------
+    q = getCurrentQ(this);              % column vector 4x1
+    a = action(:);                      % column vector 4x1
+    dq = q - prevQ;                     % observed motion
+    effectNorm = norm(dq, 2);           % total movement magnitude
 
-    if isempty(prevQ)
-        dq = zeros(size(q));
-    else
-        dq = q - prevQ;
-    end
+    % -------------------------
+    % Term 1: reward movement
+    % -------------------------
+    % Reward moving, but softly saturate to avoid encouraging wild motion
+    moveReward = 2.0 * tanh(6.0 * effectNorm);
 
-    dqNorm = norm(dq);
-
-    % =========================================================
-    % 1) MOVIMIENTO BASE
-    % =========================================================
-    r_motion = 2.5 * dqNorm;
-
-    % =========================================================
-    % 2) DIRECCIONALIDAD (CLAVE NUEVA)
-    % =========================================================
-    dirReward = 0;
-    for i = 1:length(action)
-        if action(i) ~= 0
-            dirReward = dirReward + action(i) * dq(i);
+    % -------------------------
+    % Term 2: direction agreement
+    % -------------------------
+    % If action says +1 and dq is positive => good
+    % If action says -1 and dq is negative => good
+    % If action says 0 and dq is near zero => acceptable
+    dirScore = 0;
+    for i = 1:length(a)
+        if a(i) == 0
+            % reward staying still only if joint actually remains still
+            dirScore = dirScore + max(0, 1 - abs(dq(i))/0.03);
+        else
+            dirScore = dirScore + sign(a(i)) * signWithDeadzone(dq(i), 0.005);
         end
     end
+    dirScore = dirScore / length(a);    % normalize to approx [-1,1]
+    dirReward = 1.5 * dirScore;
 
-    r_direction = 3.0 * dirReward;
+    % -------------------------
+    % Term 3: progress vs previous step
+    % -------------------------
+    % Since we removed q_ref from the reward core, we define "progress"
+    % as producing motion with better quality than the previous step:
+    % - more useful movement
+    % - better alignment
+    moveQuality = 0.6 * effectNorm + 0.4 * max(dirScore, -1);
+    dProgress = moveQuality - prevMoveQuality;
+    progressReward = 2.5 * tanh(8.0 * dProgress);
 
-    % =========================================================
-    % 3) BANDA DE MOVIMIENTO ÓPTIMA
-    % =========================================================
-    target = 0.08;
-    r_band = -1.5 * abs(dqNorm - target);
-
-    % =========================================================
-    % 4) SUAVIDAD
-    % =========================================================
-    if isempty(prevQ)
-        r_smooth = 0;
+    % -------------------------
+    % Term 4: dead-zone penalty
+    % -------------------------
+    if effectNorm < 0.015
+        deadPenalty = -2.0;
+    elseif effectNorm < 0.03
+        deadPenalty = -0.8;
     else
-        dqChange = dq - (prevQ - prevQ); % simplificado
-        r_smooth = -0.8 * norm(dqChange);
+        deadPenalty = 0;
     end
 
-    % =========================================================
-    % 5) PENALIZAR INACCIÓN
-    % =========================================================
-    inactivity = 0;
-    if all(action == 0)
-        inactivity = -0.1;
+    % -------------------------
+    % Term 5: repeated action collapse penalty
+    % -------------------------
+    if isequal(a', prevAction')
+        repeatCount = repeatCount + 1;
+    else
+        repeatCount = 0;
     end
 
-    if dqNorm < 1e-3
-        inactivity = inactivity - 0.1;
+    if repeatCount >= 3
+        repeatPenalty = -0.15 * min(repeatCount - 2, 10);
+    else
+        repeatPenalty = 0;
     end
 
-    % =========================================================
-    % 6) PENALIZAR USO REPETIDO DE ACCIONES (ANTI-COLLAPSE)
-    % =========================================================
-    actionHistory = [actionHistory; action];
+    % -------------------------
+    % Term 6: overshoot / abrupt motion penalty
+    % -------------------------
+    % Penalize excessive movement jumps
+    smoothPenalty = -0.8 * max(0, effectNorm - 0.18);
 
-    if size(actionHistory,1) > 20
-        actionHistory(1,:) = [];
+    % -------------------------
+    % Term 7: regression penalty
+    % -------------------------
+    % If action-direction consistency is poor AND movement happened,
+    % penalize harder than v2
+    if effectNorm > 0.02 && dirScore < 0
+        regressionPenalty = -1.5 * abs(dirScore);
+    else
+        regressionPenalty = 0;
     end
 
-    uniqueActions = unique(actionHistory, 'rows');
-    diversityRatio = size(uniqueActions,1) / size(actionHistory,1);
+    % -------------------------
+    % Final reward
+    % -------------------------
+    reward = moveReward + dirReward + progressReward + ...
+             deadPenalty + repeatPenalty + smoothPenalty + regressionPenalty;
 
-    r_diversity = 0.5 * diversityRatio;
+    % Optional clip for training stability
+    reward = max(min(reward, 6), -6);
 
-    % =========================================================
-    % 7) PENALIZAR CAMBIOS BRUSCOS
-    % =========================================================
-    r_action_change = -0.03 * mean((action - prevAction).^2);
-
-    % =========================================================
-    % 8) REWARD TOTAL
-    % =========================================================
-    reward = ...
-        r_motion + ...
-        r_direction + ...
-        r_band + ...
-        r_smooth + ...
-        inactivity + ...
-        r_diversity + ...
-        r_action_change;
-
-    rewardVector = reward * ones(1, length(action));
-
-    % actualizar memoria
+    % -------------------------
+    % Update persistent variables
+    % -------------------------
     prevQ = q;
-    prevAction = action;
+    prevAction = a';
+    prevEffectNorm = effectNorm;
+    prevMoveQuality = moveQuality;
+end
 
-    % debug
-    if this.verbose && mod(this.c,5)==1
-        fprintf('[RW V2] dq=%.4f dir=%.4f div=%.3f total=%.4f\n', ...
-            dqNorm, dirReward, diversityRatio, reward);
+% ============================================================
+% Helper: get current q
+% ============================================================
+function q = getCurrentQ(this)
+    if isprop(this, 'adjustEnc') && ~isempty(this.adjustEnc)
+        q = this.adjustEnc(end,:)';
+    elseif isprop(this, 'qLog') && ~isempty(this.qLog)
+        q = this.qLog(end,:)';
+    else
+        error('reward_encoder_control_v3: No normalized q source found.');
+    end
+end
+
+% ============================================================
+% Helper: sign with deadzone
+% ============================================================
+function s = signWithDeadzone(x, thr)
+    if abs(x) < thr
+        s = 0;
+    else
+        s = sign(x);
     end
 end
