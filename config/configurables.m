@@ -75,8 +75,8 @@ params.actionGain = 1.0;
 % when ``run_training`` is true, the environment trains the agent.
 % when false, only uses the agent (simulation aka evaluation). Some configs
 % are defined depending on the value of ``run_training``.
-params.run_training = true;   %ENTRENAMIENTO!!!!!!
-%params.run_training = false;   %EALUACION!!!!!!!!!
+%params.run_training = true;   %ENTRENAMIENTO!!!!!!
+params.run_training = false;   %EALUACION!!!!!!!!!
 
 
 % --- sim options
@@ -115,7 +115,7 @@ end
 if ~params.newTraining
 
     params.agentFile = ...
-        "C:\trainedAgentsProtesisNew\00_oldy\_\DDQN_81_Espacio_Acciones\Num_Steps_100\V21_20000_Episodes\Num_Steps_100\26-03-19 19 30 36\Agent20000.mat";
+        "C:\trainedAgentsProtesisNew\00_oldy\_\DDQN_81_Espacio_Acciones\Num_Steps_100\Reward_EMG_d_dq\Reward_EMG_d_dq\V26_20000_Episodes\V26_20000_Episodes\26-03-26 23 34 11\Agent19000.mat";
     params.agent_id = 'best'; %'QRDQN_v6';%'best'; % or name
     % params.agentFile = ...
     %     ".\trainedAgents\Agent3.mat";

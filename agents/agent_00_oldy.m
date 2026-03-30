@@ -62,6 +62,65 @@
 %%%%%%%%%%%%%%%%%%% 48 FEATURES               %%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
+% function agent = agent_00_oldy(observationInfo, actionInfo)
+% numObs = prod(observationInfo.Dimension);
+% numActions = numel(actionInfo.Elements);
+% 
+% criticNetwork = [
+%     featureInputLayer(numObs, "Name", "observation", "Normalization","none")
+%     fullyConnectedLayer(64, "Name", "fc_1")
+%     reluLayer("Name", "relu1")
+%     dropoutLayer(0.1, "Name", "dropout1")
+%     fullyConnectedLayer(32, "Name", "fc_2")
+%     reluLayer("Name", "relu2")
+%     dropoutLayer(0.1, "Name", "dropout2")
+%     fullyConnectedLayer(32, "Name", "fc_3")
+%     reluLayer("Name", "relu3")
+%     fullyConnectedLayer(numActions, "Name", "output")
+% ];
+% 
+% opt = rlRepresentationOptions( ...
+%     'LearnRate', 1e-4, ...
+%     'L2RegularizationFactor', 5e-5, ...
+%     'Optimizer', 'adam');
+% 
+% opt.OptimizerParameters.GradientDecayFactor = 0.85;
+% opt.OptimizerParameters.Momentum = 0.85;
+% 
+% critic = rlQValueRepresentation( ...
+%     criticNetwork, observationInfo, actionInfo, ...
+%     'Observation', {'observation'}, opt);
+% 
+% agentOptions = rlDQNAgentOptions( ...
+%     'UseDoubleDQN', true, ...
+%     'SequenceLength', 1, ...
+%     'TargetUpdateMethod','smoothing', ...
+%     'TargetSmoothFactor', 0.05, ...
+%     'TargetUpdateFrequency', 3, ...
+%     'ResetExperienceBufferBeforeTraining', false, ...
+%     'SaveExperienceBufferWithAgent', true, ...
+%     'MiniBatchSize', 64, ...
+%     'NumStepsToLookAhead', 2, ...
+%     'ExperienceBufferLength', 1e6, ...
+%     'DiscountFactor', 0.97);
+% 
+% agentOptions.EpsilonGreedyExploration.EpsilonDecay = 15e-5;
+% agentOptions.EpsilonGreedyExploration.Epsilon = 1;
+% agentOptions.EpsilonGreedyExploration.EpsilonMin = 0.001;
+% 
+% 
+% agent = rlDQNAgent(critic, agentOptions);
+% 
+% bufferLength = agentOptions.ExperienceBufferLength;
+% perBuffer = rlPrioritizedReplayMemory(observationInfo, actionInfo, bufferLength);
+% 
+% perBuffer.PriorityExponent = 0.6;
+% perBuffer.InitialImportanceSamplingExponent = 0.4;
+% perBuffer.NumAnnealingSteps = bufferLength;
+% 
+% agent.ExperienceBuffer = perBuffer;
+% end
+
 function agent = agent_00_oldy(observationInfo, actionInfo)
 numObs = prod(observationInfo.Dimension);
 numActions = numel(actionInfo.Elements);
@@ -104,9 +163,12 @@ agentOptions = rlDQNAgentOptions( ...
     'ExperienceBufferLength', 1e6, ...
     'DiscountFactor', 0.97);
 
-agentOptions.EpsilonGreedyExploration.EpsilonDecay = 15e-5;
-agentOptions.EpsilonGreedyExploration.Epsilon = 1;
-agentOptions.EpsilonGreedyExploration.EpsilonMin = 0.001;
+% ============================================================
+% Exploración ajustada para evitar colapso temprano de política
+% ============================================================
+agentOptions.EpsilonGreedyExploration.Epsilon = 1.0;
+agentOptions.EpsilonGreedyExploration.EpsilonDecay = 5e-5;
+agentOptions.EpsilonGreedyExploration.EpsilonMin = 0.05;
 
 agent = rlDQNAgent(critic, agentOptions);
 
@@ -119,8 +181,6 @@ perBuffer.NumAnnealingSteps = bufferLength;
 
 agent.ExperienceBuffer = perBuffer;
 end
-
-
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
