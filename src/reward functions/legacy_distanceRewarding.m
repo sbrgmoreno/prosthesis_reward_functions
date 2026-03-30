@@ -4693,6 +4693,187 @@ function [reward, rewardVector, action] = legacy_distanceRewarding(this, action)
 %   - action is 1x4 in {-1,0,1}
 %   - this.c is the current step index within episode
 % ============================================================
+% 
+%     persistent prevQ prevAction repeatCount
+% 
+%     % ========================================================
+%     % RESET AT EPISODE START
+%     % ========================================================
+%     if isempty(prevQ) || this.c <= 1
+%         q = getCurrentQ(this);
+% 
+%         prevQ = q;
+%         prevAction = action;
+%         repeatCount = 0;
+% 
+%         reward = 0;
+%         rewardVector = zeros(1,6);
+%         return;
+%     end
+% 
+%     % ========================================================
+%     % CURRENT STATE
+%     % ========================================================
+%     q = getCurrentQ(this);      % 4x1
+%     dq = q - prevQ;             % observed motion
+%     a  = action(:);             % 4x1
+% 
+%     effectNorm = norm(dq, 2);
+% 
+%     % ========================================================
+%     % 1) BASE MOVEMENT REWARD
+%     % ========================================================
+%     % Reward real movement, softly saturated
+%     moveReward = 2.2 * tanh(6.0 * effectNorm);
+% 
+%     % ========================================================
+%     % 2) DEAD-ZONE PENALTY
+%     % ========================================================
+%     if effectNorm < 0.012
+%         deadPenalty = -1.2;
+%     elseif effectNorm < 0.025
+%         deadPenalty = -0.35;
+%     else
+%         deadPenalty = 0;
+%     end
+% 
+%     % ========================================================
+%     % 3) SOFT DIRECTION BONUS
+%     % ========================================================
+%     % Only evaluate motors with nonzero command
+%     activeMask = abs(a) > 0;
+%     nActive = sum(activeMask);
+% 
+%     if nActive > 0
+%         dqActive = dq(activeMask);
+%         aActive  = a(activeMask);
+% 
+%         % +1 if dq follows action sign, -1 if opposite, 0 if tiny motion
+%         dirTerms = sign(aActive) .* signWithDeadzoneVec(dqActive, 0.004);
+%         dirScore = mean(dirTerms);   % approx [-1,1]
+%     else
+%         dirScore = 0;
+%     end
+% 
+%     % Small positive incentive
+%     dirBonus = 0.45 * dirScore;
+% 
+%     % Mild extra penalty only if movement exists and direction is wrong
+%     if effectNorm > 0.02 && dirScore < 0
+%         dirPenalty = -0.25 * abs(dirScore);
+%     else
+%         dirPenalty = 0;
+%     end
+% 
+%     % ========================================================
+%     % 4) VERY SOFT ANTI-REPEAT PENALTY
+%     % ========================================================
+%     if isequal(action, prevAction)
+%         repeatCount = repeatCount + 1;
+%     else
+%         repeatCount = 0;
+%     end
+% 
+%     if repeatCount >= 5
+%         repeatPenalty = -0.05 * min(repeatCount - 4, 10);
+%     else
+%         repeatPenalty = 0;
+%     end
+% 
+%     % ========================================================
+%     % 5) VERY LIGHT SMOOTHNESS PENALTY
+%     % ========================================================
+%     % Only punish very large jumps
+%     smoothPenalty = -0.25 * max(0, effectNorm - 0.18);
+% 
+%     % ========================================================
+%     % 6) SMALL ACTIVITY BONUS
+%     % ========================================================
+%     % Slight encouragement for meaningful non-dead movement
+%     if effectNorm >= 0.025
+%         activityBonus = 0.15;
+%     else
+%         activityBonus = 0;
+%     end
+% 
+%     % ========================================================
+%     % FINAL REWARD
+%     % ========================================================
+%     reward = moveReward + deadPenalty + dirBonus + ...
+%              dirPenalty + repeatPenalty + smoothPenalty + activityBonus;
+% 
+%     % Mild clipping for stability
+%     reward = max(min(reward, 6), -6);
+% 
+%     % ========================================================
+%     % DIAGNOSTIC VECTOR
+%     % ========================================================
+%     rewardVector = [moveReward, ...
+%                     deadPenalty, ...
+%                     dirBonus, ...
+%                     dirPenalty, ...
+%                     repeatPenalty, ...
+%                     smoothPenalty + activityBonus];
+% 
+%     % ========================================================
+%     % UPDATE PERSISTENT STATE
+%     % ========================================================
+%     prevQ = q;
+%     prevAction = action;
+% end
+% 
+% % ============================================================
+% % Helper: get normalized q
+% % ============================================================
+% function q = getCurrentQ(this)
+%     if isprop(this, 'adjustEnc') && ~isempty(this.adjustEnc)
+%         q = this.adjustEnc(end,:)';
+%     elseif isprop(this, 'qLog') && ~isempty(this.qLog)
+%         q = this.qLog(end,:)';
+%     else
+%         error('reward_encoder_control_v21: No normalized q source found.');
+%     end
+% end
+% 
+% % ============================================================
+% % Helper: sign with deadzone for vectors
+% % ============================================================
+% function s = signWithDeadzoneVec(x, thr)
+%     s = zeros(size(x));
+%     s(x > thr)  = 1;
+%     s(x < -thr) = -1;
+% end
+
+
+
+
+
+
+% % % % % % % % % % % % % % % % % %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% % % % % % % % % % % % % % % % % % %%%%%%%%%%%%%%%% VERSION 30 mejora pequena a version 26 con suaves modificaciones %%%%%%%%%%%%%%%%
+% % % % % % % % % % % % % % % % % %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% % % % % % % % % %
+% % % % % % %function [reward, rewardVector, action] = reward_encoder_control_v205(this, action)
+% ============================================================
+% Reward v2.05
+% Conservative refinement of encoder_control_v2
+%
+% Goals:
+% - preserve the useful behavior of v2
+% - softly reward action-effect directional consistency
+% - very lightly discourage extreme action repetition
+% - avoid over-regularization
+%
+% Outputs:
+%   reward       : scalar reward
+%   rewardVector : diagnostic vector
+%   action       : passthrough action
+%
+% Assumptions:
+%   - this.adjustEnc(end,:) contains normalized q in [0,1]
+%   - action is 1x4 in {-1,0,1}
+%   - this.c is the current step index within episode
+% ============================================================
 
     persistent prevQ prevAction repeatCount
 
@@ -4707,7 +4888,7 @@ function [reward, rewardVector, action] = legacy_distanceRewarding(this, action)
         repeatCount = 0;
 
         reward = 0;
-        rewardVector = zeros(1,6);
+        rewardVector = zeros(1,7);
         return;
     end
 
@@ -4721,26 +4902,36 @@ function [reward, rewardVector, action] = legacy_distanceRewarding(this, action)
     effectNorm = norm(dq, 2);
 
     % ========================================================
-    % 1) BASE MOVEMENT REWARD
+    % 1) BASE MOVEMENT REWARD  (main signal)
     % ========================================================
-    % Reward real movement, softly saturated
-    moveReward = 2.2 * tanh(6.0 * effectNorm);
+    % Keep this term dominant
+    moveReward = 2.4 * tanh(6.0 * effectNorm);
 
     % ========================================================
     % 2) DEAD-ZONE PENALTY
     % ========================================================
-    if effectNorm < 0.012
-        deadPenalty = -1.2;
-    elseif effectNorm < 0.025
-        deadPenalty = -0.35;
+    if effectNorm < 0.010
+        deadPenalty = -0.90;
+    elseif effectNorm < 0.020
+        deadPenalty = -0.20;
     else
         deadPenalty = 0;
     end
 
     % ========================================================
-    % 3) SOFT DIRECTION BONUS
+    % 3) SMALL ACTIVITY BONUS
     % ========================================================
-    % Only evaluate motors with nonzero command
+    % Reward meaningful motion without exaggerating it
+    if effectNorm >= 0.020
+        activityBonus = 0.10;
+    else
+        activityBonus = 0;
+    end
+
+    % ========================================================
+    % 4) VERY WEAK DIRECTION BONUS
+    % ========================================================
+    % Only nonzero commanded motors are evaluated
     activeMask = abs(a) > 0;
     nActive = sum(activeMask);
 
@@ -4748,25 +4939,27 @@ function [reward, rewardVector, action] = legacy_distanceRewarding(this, action)
         dqActive = dq(activeMask);
         aActive  = a(activeMask);
 
-        % +1 if dq follows action sign, -1 if opposite, 0 if tiny motion
         dirTerms = sign(aActive) .* signWithDeadzoneVec(dqActive, 0.004);
         dirScore = mean(dirTerms);   % approx [-1,1]
     else
         dirScore = 0;
     end
 
-    % Small positive incentive
-    dirBonus = 0.45 * dirScore;
+    % Very small bonus: enough to bias learning, not enough to dominate
+    dirBonus = 0.18 * dirScore;
 
-    % Mild extra penalty only if movement exists and direction is wrong
-    if effectNorm > 0.02 && dirScore < 0
-        dirPenalty = -0.25 * abs(dirScore);
+    % ========================================================
+    % 5) VERY MILD WRONG-DIRECTION PENALTY
+    % ========================================================
+    % Only penalize if movement is real and direction is clearly opposite
+    if effectNorm > 0.035 && dirScore < -0.25
+        wrongDirPenalty = -0.10 * abs(dirScore);
     else
-        dirPenalty = 0;
+        wrongDirPenalty = 0;
     end
 
     % ========================================================
-    % 4) VERY SOFT ANTI-REPEAT PENALTY
+    % 6) ALMOST SYMBOLIC ANTI-REPEAT PENALTY
     % ========================================================
     if isequal(action, prevAction)
         repeatCount = repeatCount + 1;
@@ -4774,35 +4967,30 @@ function [reward, rewardVector, action] = legacy_distanceRewarding(this, action)
         repeatCount = 0;
     end
 
-    if repeatCount >= 5
-        repeatPenalty = -0.05 * min(repeatCount - 4, 10);
+    % Start only after many repeated steps
+    if repeatCount >= 7
+        repeatPenalty = -0.02 * min(repeatCount - 6, 10);
     else
         repeatPenalty = 0;
     end
 
     % ========================================================
-    % 5) VERY LIGHT SMOOTHNESS PENALTY
+    % 7) VERY LIGHT OVERSHOOT PENALTY
     % ========================================================
-    % Only punish very large jumps
-    smoothPenalty = -0.25 * max(0, effectNorm - 0.18);
-
-    % ========================================================
-    % 6) SMALL ACTIVITY BONUS
-    % ========================================================
-    % Slight encouragement for meaningful non-dead movement
-    if effectNorm >= 0.025
-        activityBonus = 0.15;
+    % Only punish clearly excessive movement
+    if effectNorm > 0.20
+        overshootPenalty = -0.10 * (effectNorm - 0.20);
     else
-        activityBonus = 0;
+        overshootPenalty = 0;
     end
 
     % ========================================================
     % FINAL REWARD
     % ========================================================
-    reward = moveReward + deadPenalty + dirBonus + ...
-             dirPenalty + repeatPenalty + smoothPenalty + activityBonus;
+    reward = moveReward + deadPenalty + activityBonus + ...
+             dirBonus + wrongDirPenalty + repeatPenalty + overshootPenalty;
 
-    % Mild clipping for stability
+    % Mild clip for stability
     reward = max(min(reward, 6), -6);
 
     % ========================================================
@@ -4810,10 +4998,11 @@ function [reward, rewardVector, action] = legacy_distanceRewarding(this, action)
     % ========================================================
     rewardVector = [moveReward, ...
                     deadPenalty, ...
+                    activityBonus, ...
                     dirBonus, ...
-                    dirPenalty, ...
+                    wrongDirPenalty, ...
                     repeatPenalty, ...
-                    smoothPenalty + activityBonus];
+                    overshootPenalty];
 
     % ========================================================
     % UPDATE PERSISTENT STATE
@@ -4831,7 +5020,7 @@ function q = getCurrentQ(this)
     elseif isprop(this, 'qLog') && ~isempty(this.qLog)
         q = this.qLog(end,:)';
     else
-        error('reward_encoder_control_v21: No normalized q source found.');
+        error('reward_encoder_control_v205: No normalized q source found.');
     end
 end
 
