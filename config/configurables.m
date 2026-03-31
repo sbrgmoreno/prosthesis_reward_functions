@@ -60,7 +60,7 @@ params.maxNumberStepsInEpisodes = 100; %50;% max buffer in episode
 % duration.
 params.episodeDuration = 5; % Denis dataset has up to 5 seconds of data
 
-params.period = 0.2; % reading time
+params.period = 0.1; %0.2; % reading time
 
 params.verbose = true;  % print every statement verbose
 
@@ -68,6 +68,8 @@ params.verbose = true;  % print every statement verbose
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% PROBAR CON SPEED %%%%%%%%%%%%%%%%%%%%%%%%%
 params.actionGain = 1.0;
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% ESPACIO DE ACCIONES DE 9 %%%%%%%%%%%%%%%%%%%%%%%%%
+params.actionMode = "single_motor_9";
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 
@@ -182,7 +184,7 @@ params.reward_function = @(env, action, observation) ...
 %% Actions
 % when true only 1 action for all motors,
 % when false, each motor has an action
-params.unifyActions = false;
+params.unifyActions = false; %MANTENER EN FALSE
 
 % params.speeds = [170, 170, 255, 170]; % little, idx, thumb, mid
 params.speeds = [140, 100, 160, 70] ;%[140, 100, 160, 70]        %100* [1, 1, 1, 1]; % little, idx, thumb, mid %params.speeds = 100* [1, 1, 1, 1];

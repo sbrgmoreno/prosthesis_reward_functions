@@ -1,29 +1,98 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%%%%%%%%%%%%%%%%%%% 81 acciones %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%% 81  y 9acciones %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 function actionInfo = defineActionDiscreteInfo()
+% defineActionDiscreteInfo() defines discrete actions for the environment.
+%
+% Modes:
+% - unifyActions = true  -> scalar action {-1,0,1}
+% - actionMode = "full_81"      -> 81 joint actions (old behavior)
+% - actionMode = "single_motor_9" -> 9 atomic actions for fine control
+%
+% ============================================================
 
+%% config
 if configurables('unifyActions')
     actionInfo = rlFiniteSetSpec([-1 0 1]);
+
 else
-    vals = [-1 0 1];
-    actions = [];
-    for a = vals
-        for b = vals
-            for c = vals
-                for d = vals
-                    actions = [actions; a b c d];
+    actionMode = configurables('actionMode');
+
+    switch string(actionMode)
+
+        case "full_81"
+            vals = [-1 0 1];
+            actions = [];
+            for a = vals
+                for b = vals
+                    for c = vals
+                        for d = vals
+                            actions = [actions; a b c d];
+                        end
+                    end
                 end
             end
-        end
+            actionInfo = rlFiniteSetSpec(num2cell(actions,2)');
+
+        case "single_motor_9"
+            actions = [ ...
+                 0  0  0  0;   % no-op
+                 1  0  0  0;   % motor 1 +
+                -1  0  0  0;   % motor 1 -
+                 0  1  0  0;   % motor 2 +
+                 0 -1  0  0;   % motor 2 -
+                 0  0  1  0;   % motor 3 +
+                 0  0 -1  0;   % motor 3 -
+                 0  0  0  1;   % motor 4 +
+                 0  0  0 -1];  % motor 4 -
+
+            actionInfo = rlFiniteSetSpec(num2cell(actions,2)');
+
+        otherwise
+            error("defineActionDiscreteInfo: Unknown actionMode '%s'", string(actionMode));
     end
-    actionInfo = rlFiniteSetSpec(num2cell(actions,2)');
 end
 
+%% properties
 actionInfo.Name = 'prosthesis_action_space';
 actionInfo.Description = ...
-    'Discrete action space with 81 combinations for 4 motors.';
+    'Discrete action space for prosthesis control.';
 end
+
+
+
+
+
+
+
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%% 81 acciones %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% function actionInfo = defineActionDiscreteInfo()
+% 
+% if configurables('unifyActions')
+%     actionInfo = rlFiniteSetSpec([-1 0 1]);
+% else
+%     vals = [-1 0 1];
+%     actions = [];
+%     for a = vals
+%         for b = vals
+%             for c = vals
+%                 for d = vals
+%                     actions = [actions; a b c d];
+%                 end
+%             end
+%         end
+%     end
+%     actionInfo = rlFiniteSetSpec(num2cell(actions,2)');
+% end
+% 
+% actionInfo.Name = 'prosthesis_action_space';
+% actionInfo.Description = ...
+%     'Discrete action space with 81 combinations for 4 motors.';
+% end
 
 
 
