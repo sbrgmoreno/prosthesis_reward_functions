@@ -67,7 +67,7 @@ params.verbose = true;  % print every statement verbose
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% PROBAR CON SPEED %%%%%%%%%%%%%%%%%%%%%%%%%
-params.actionGain = 1.0;
+params.actionGain = 0.4; %1.0;
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% ESPACIO DE ACCIONES DE 9 %%%%%%%%%%%%%%%%%%%%%%%%%
 params.actionMode = "single_motor_9";
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -77,8 +77,8 @@ params.actionMode = "single_motor_9";
 % when ``run_training`` is true, the environment trains the agent.
 % when false, only uses the agent (simulation aka evaluation). Some configs
 % are defined depending on the value of ``run_training``.
-%params.run_training = true;   %ENTRENAMIENTO!!!!!!
-params.run_training = false;   %EALUACION!!!!!!!!!
+params.run_training = true;   %ENTRENAMIENTO!!!!!!
+%params.run_training = false;   %EALUACION!!!!!!!!!
 
 
 % --- sim options
@@ -91,7 +91,7 @@ if ~params.run_training
         );
 else
     params.RLtrainingOptions = rlTrainingOptions(...
-        'MaxEpisodes',20000,... % when too many episodes it makes slower creating episode =20000000
+        'MaxEpisodes',3000,... % when too many episodes it makes slower creating episode =20000000
         'MaxStepsPerEpisode', params.maxNumberStepsInEpisodes,...
         'StopTrainingCriteria',"AverageReward",...
         'StopTrainingValue', 600,... % new rewards
