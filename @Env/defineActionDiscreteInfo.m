@@ -1,13 +1,14 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%%%%%%%%%%%%%%%%%%% 81  y 9acciones %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%% 81  y 9 y [17 (hibridos)] acciones %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 function actionInfo = defineActionDiscreteInfo()
 % defineActionDiscreteInfo() defines discrete actions for the environment.
 %
 % Modes:
-% - unifyActions = true  -> scalar action {-1,0,1}
-% - actionMode = "full_81"      -> 81 joint actions (old behavior)
-% - actionMode = "single_motor_9" -> 9 atomic actions for fine control
+% - unifyActions = true          -> scalar action {-1,0,1}
+% - actionMode = "full_81"       -> 81 joint actions
+% - actionMode = "single_motor_9"-> 9 atomic actions
+% - actionMode = "hybrid_17"     -> 17 actions (9 atomic + 8 coordinated)
 %
 % ============================================================
 
@@ -37,14 +38,39 @@ else
         case "single_motor_9"
             actions = [ ...
                  0  0  0  0;   % no-op
-                 1  0  0  0;   % motor 1 +
-                -1  0  0  0;   % motor 1 -
-                 0  1  0  0;   % motor 2 +
-                 0 -1  0  0;   % motor 2 -
-                 0  0  1  0;   % motor 3 +
-                 0  0 -1  0;   % motor 3 -
-                 0  0  0  1;   % motor 4 +
-                 0  0  0 -1];  % motor 4 -
+                 1  0  0  0;   % m1 +
+                -1  0  0  0;   % m1 -
+                 0  1  0  0;   % m2 +
+                 0 -1  0  0;   % m2 -
+                 0  0  1  0;   % m3 +
+                 0  0 -1  0;   % m3 -
+                 0  0  0  1;   % m4 +
+                 0  0  0 -1];  % m4 -
+
+            actionInfo = rlFiniteSetSpec(num2cell(actions,2)');
+
+        case "hybrid_17"
+            actions = [ ...
+                % -------- atomic actions (9) --------
+                 0  0  0  0;   % no-op
+                 1  0  0  0;   % m1 +
+                -1  0  0  0;   % m1 -
+                 0  1  0  0;   % m2 +
+                 0 -1  0  0;   % m2 -
+                 0  0  1  0;   % m3 +
+                 0  0 -1  0;   % m3 -
+                 0  0  0  1;   % m4 +
+                 0  0  0 -1;   % m4 -
+
+                % ----- coordinated actions (8) -----
+                 1  1  0  0;   % m1,m2 +
+                -1 -1  0  0;   % m1,m2 -
+                 0  0  1  1;   % m3,m4 +
+                 0  0 -1 -1;   % m3,m4 -
+                 1  0  1  0;   % m1,m3 +
+                -1  0 -1  0;   % m1,m3 -
+                 0  1  0  1;   % m2,m4 +
+                 0 -1  0 -1];  % m2,m4 -
 
             actionInfo = rlFiniteSetSpec(num2cell(actions,2)');
 
@@ -55,10 +81,8 @@ end
 
 %% properties
 actionInfo.Name = 'prosthesis_action_space';
-actionInfo.Description = ...
-    'Discrete action space for prosthesis control.';
+actionInfo.Description = 'Discrete action space for prosthesis control.';
 end
-
 
 
 
