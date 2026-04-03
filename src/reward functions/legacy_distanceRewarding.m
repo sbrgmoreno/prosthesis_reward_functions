@@ -5286,275 +5286,27 @@ function [reward, rewardVector, action] = legacy_distanceRewarding(this, action)
 
 
 
-% % % % % % % % % % % % % % % % % % % %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% % % % % % % % % % % % % % % % % % % % %%%%%%%%%%%%%%%% VERSION 32 reward hibrida usa dos bloques con q_ref pero no como principal mejora a V31 %%%%%%%%%%%%%%%%
-% % % % % % % % % % % % % % % % % % % %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% % % % % % % % % % % %
-% % function [reward, rewardVector, action] = reward_encoder_intention_v2(this, action)
-% % ============================================================
-% % Reward v2: encoder control + intention guidance from q_ref
-% %
-% % Main goal:
-% % - encourage useful movement
-% % - reduce dead-zone
-% % - improve direction consistency
-% % - avoid collapse to few repeated actions
-% %
-% % q_ref is used only as intention/trend, NOT as tracking target
-% % ============================================================
-% 
-%     persistent prevQ prevQRef prevAction repeatCount actionHistory
-% 
-%     % ========================================================
-%     % RESET
-%     % ========================================================
-%     if isempty(prevQ) || this.c <= 1
-%         q    = getCurrentQ(this);
-%         qRef = getCurrentQRef(this);
-% 
-%         prevQ = q;
-%         prevQRef = qRef;
-%         prevAction = action;
-%         repeatCount = 0;
-%         actionHistory = zeros(6, numel(action));   % ventana corta
-% 
-%         reward = 0;
-%         rewardVector = zeros(1,11);
-%         return;
-%     end
-% 
-%     % ========================================================
-%     % CURRENT STATE
-%     % ========================================================
-%     q    = getCurrentQ(this);
-%     qRef = getCurrentQRef(this);
-% 
-%     dq    = q - prevQ;
-%     dqRef = qRef - prevQRef;
-% 
-%     a = action(:);
-%     effectNorm = norm(dq, 2);
-% 
-%     % ========================================================
-%     % 1) BASE MOVEMENT REWARD
-%     % ========================================================
-%     moveReward = 1.8 * tanh(8.0 * effectNorm);
-% 
-%     % ========================================================
-%     % 2) DEAD-ZONE PENALTY (stronger)
-%     % ========================================================
-%     if effectNorm < 0.008
-%         deadPenalty = -1.40;
-%     elseif effectNorm < 0.018
-%         deadPenalty = -0.45;
-%     else
-%         deadPenalty = 0;
-%     end
-% 
-%     % ========================================================
-%     % 3) ACTIVITY BONUS (moderate useful movement)
-%     % ========================================================
-%     if effectNorm >= 0.02 && effectNorm <= 0.10
-%         activityBonus = 0.15;
-%     else
-%         activityBonus = 0;
-%     end
-% 
-%     % ========================================================
-%     % 4) ACTION -> MOVEMENT DIRECTION BONUS
-%     % ========================================================
-%     activeMask = abs(a) > 0;
-%     if any(activeMask)
-%         dqActive = dq(activeMask);
-%         aActive  = a(activeMask);
-% 
-%         dirTerms = sign(aActive) .* signWithDeadzoneVec(dqActive, 0.004);
-%         dirScore = mean(dirTerms);
-%     else
-%         dirScore = 0;
-%     end
-% 
-%     dirBonus = 0.30 * max(dirScore, 0);
-% 
-%     % ========================================================
-%     % 5) WRONG-DIRECTION PENALTY (stronger)
-%     % ========================================================
-%     if effectNorm > 0.025 && dirScore < 0
-%         wrongDirPenalty = -0.45 * abs(dirScore);
-%     else
-%         wrongDirPenalty = 0;
-%     end
-% 
-%     % ========================================================
-%     % 6) INTENTION TREND BONUS FROM q_ref
-%     % ========================================================
-%     refActiveMask = abs(dqRef) > 0.010;
-% 
-%     if any(refActiveMask)
-%         dqIntent  = signWithDeadzoneVec(dq(refActiveMask), 0.004);
-%         refIntent = signWithDeadzoneVec(dqRef(refActiveMask), 0.010);
-% 
-%         trendTerms = dqIntent .* refIntent;
-%         trendScore = mean(trendTerms);
-%     else
-%         trendScore = 0;
-%     end
-% 
-%     intentionBonus = 0.25 * max(trendScore, 0);
-% 
-%     % ========================================================
-%     % 7) CONTRADICTION PENALTY AGAINST INTENTION (stronger)
-%     % ========================================================
-%     if any(refActiveMask) && trendScore < 0 && effectNorm > 0.025
-%         contradictionPenalty = -0.50 * abs(trendScore);
-%     else
-%         contradictionPenalty = 0;
-%     end
-% 
-%     % ========================================================
-%     % 8) ANTI-REPEAT PENALTY
-%     % ========================================================
-%     if isequal(action, prevAction)
-%         repeatCount = repeatCount + 1;
-%     else
-%         repeatCount = 0;
-%     end
-% 
-%     if repeatCount >= 6
-%         repeatPenalty = -0.05 * min(repeatCount - 5, 12);
-%     else
-%         repeatPenalty = 0;
-%     end
-% 
-%     % ========================================================
-%     % 9) SHORT-WINDOW ACTION DIVERSITY BONUS
-%     % ========================================================
-%     actionHistory = [actionHistory(2:end,:); action(:)'];
-%     uniqueCount = size(unique(actionHistory, 'rows'), 1);
-% 
-%     if this.c > 8
-%         diversityBonus = 0.05 * min(uniqueCount - 1, 4);
-%     else
-%         diversityBonus = 0;
-%     end
-% 
-%     % ========================================================
-%     % 10) OVERSHOOT PENALTY
-%     % ========================================================
-%     if effectNorm > 0.16
-%         overshootPenalty = -0.25 * (effectNorm - 0.16);
-%     else
-%         overshootPenalty = 0;
-%     end
-% 
-%     % ========================================================
-%     % 11) STABILITY BONUS
-%     % ========================================================
-%     if effectNorm >= 0.025 && effectNorm <= 0.08 && dirScore > 0 && trendScore >= 0
-%         stabilityBonus = 0.14;
-%     else
-%         stabilityBonus = 0;
-%     end
-% 
-%     % ========================================================
-%     % FINAL REWARD
-%     % ========================================================
-%     reward = moveReward ...
-%            + deadPenalty ...
-%            + activityBonus ...
-%            + dirBonus ...
-%            + wrongDirPenalty ...
-%            + intentionBonus ...
-%            + contradictionPenalty ...
-%            + repeatPenalty ...
-%            + diversityBonus ...
-%            + overshootPenalty ...
-%            + stabilityBonus;
-% 
-%     reward = max(min(reward, 6), -6);
-% 
-%     rewardVector = [moveReward, ...
-%                     deadPenalty, ...
-%                     activityBonus, ...
-%                     dirBonus, ...
-%                     wrongDirPenalty, ...
-%                     intentionBonus, ...
-%                     contradictionPenalty, ...
-%                     repeatPenalty, ...
-%                     diversityBonus, ...
-%                     overshootPenalty, ...
-%                     stabilityBonus];
-% 
-%     % ========================================================
-%     % UPDATE
-%     % ========================================================
-%     prevQ = q;
-%     prevQRef = qRef;
-%     prevAction = action;
-% end
-% 
-% function q = getCurrentQ(this)
-%     if isprop(this, 'adjustEnc') && ~isempty(this.adjustEnc)
-%         q = this.adjustEnc(end,:)';
-%     elseif isprop(this, 'qLog') && ~isempty(this.qLog)
-%         q = this.qLog(end,:)';
-%     else
-%         error('reward_encoder_intention_v2: No normalized q source found.');
-%     end
-% end
-% 
-% function qRef = getCurrentQRef(this)
-%     if isprop(this, 'qRefLog') && ~isempty(this.qRefLog)
-%         qRef = this.qRefLog(end,:)';
-%     elseif isprop(this, 'flexConverted') && ~isempty(this.flexConverted)
-%         qRef = this.flexConverted(end,:)';
-%     else
-%         error('reward_encoder_intention_v2: No qRef source found.');
-%     end
-% end
-% 
-% function s = signWithDeadzoneVec(x, thr)
-%     s = zeros(size(x));
-%     s(x > thr)  = 1;
-%     s(x < -thr) = -1;
-% end
-
-
-
-
-
-% % % % % % % % % % % % % % % % % % % %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% % % % % % % % % % % % % % % % % % % % %%%%%%%%%%%%%%%% VERSION 33 reward hibrida usa dos bloques con q_ref pero no como principal mejora a V32 %%%%%%%%%%%%%%%%
-% % % % % % % % % % % % % % % % % % % %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% % % % % % % % % % % %
-% %function [reward, rewardVector, action] = reward_encoder_intention_v3(this, action)
+% % % % % % % % % % % % % % % % % % %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% % % % % % % % % % % % % % % % % % % %%%%%%%%%%%%%%%% VERSION 32 reward hibrida usa dos bloques con q_ref pero no como principal mejora a V31 %%%%%%%%%%%%%%%%
+% % % % % % % % % % % % % % % % % % %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% % % % % % % % % % %
+% function [reward, rewardVector, action] = reward_encoder_intention_v2(this, action)
 % ============================================================
-% Reward v3: encoder control + intention guidance from q_ref
+% Reward v2: encoder control + intention guidance from q_ref
 %
-% Main idea:
-% - Encourage useful physical movement of q
-% - Discourage dead-zone
-% - Reward consistency between action and observed dq
-% - Use q_ref ONLY as intention/trend, NOT as tracking target
-% - Discourage collapse to repeated actions
+% Main goal:
+% - encourage useful movement
+% - reduce dead-zone
+% - improve direction consistency
+% - avoid collapse to few repeated actions
 %
-% Expected action:
-%   action = 1x4 with values in {-1,0,1}
-%
-% Expected signals:
-%   q    -> normalized encoder state
-%   qRef -> auxiliary intention signal
-%
-% Output:
-%   reward       -> scalar reward
-%   rewardVector -> diagnostic decomposition
-%
+% q_ref is used only as intention/trend, NOT as tracking target
 % ============================================================
 
     persistent prevQ prevQRef prevAction repeatCount actionHistory
 
     % ========================================================
-    % RESET AT EPISODE START
+    % RESET
     % ========================================================
     if isempty(prevQ) || this.c <= 1
         q    = getCurrentQ(this);
@@ -5564,9 +5316,7 @@ function [reward, rewardVector, action] = legacy_distanceRewarding(this, action)
         prevQRef = qRef;
         prevAction = action;
         repeatCount = 0;
-
-        % Short rolling window for local action diversity
-        actionHistory = zeros(6, numel(action));
+        actionHistory = zeros(6, numel(action));   % ventana corta
 
         reward = 0;
         rewardVector = zeros(1,11);
@@ -5576,24 +5326,22 @@ function [reward, rewardVector, action] = legacy_distanceRewarding(this, action)
     % ========================================================
     % CURRENT STATE
     % ========================================================
-    q    = getCurrentQ(this);      % column vector
-    qRef = getCurrentQRef(this);   % column vector
+    q    = getCurrentQ(this);
+    qRef = getCurrentQRef(this);
 
-    dq    = q - prevQ;             % physical motion actually observed
-    dqRef = qRef - prevQRef;       % intention / trend only
+    dq    = q - prevQ;
+    dqRef = qRef - prevQRef;
 
     a = action(:);
     effectNorm = norm(dq, 2);
 
     % ========================================================
     % 1) BASE MOVEMENT REWARD
-    % Slightly reduced vs v2 so "moving" alone dominates less
     % ========================================================
-    moveReward = 1.5 * tanh(8.0 * effectNorm);
+    moveReward = 1.8 * tanh(8.0 * effectNorm);
 
     % ========================================================
-    % 2) DEAD-ZONE PENALTY
-    % Keep pressure against inactive behavior
+    % 2) DEAD-ZONE PENALTY (stronger)
     % ========================================================
     if effectNorm < 0.008
         deadPenalty = -1.40;
@@ -5604,8 +5352,7 @@ function [reward, rewardVector, action] = legacy_distanceRewarding(this, action)
     end
 
     % ========================================================
-    % 3) ACTIVITY BONUS
-    % Reward moderate useful movement
+    % 3) ACTIVITY BONUS (moderate useful movement)
     % ========================================================
     if effectNorm >= 0.02 && effectNorm <= 0.10
         activityBonus = 0.15;
@@ -5615,35 +5362,31 @@ function [reward, rewardVector, action] = legacy_distanceRewarding(this, action)
 
     % ========================================================
     % 4) ACTION -> MOVEMENT DIRECTION BONUS
-    % Does commanded sign align with observed dq sign?
     % ========================================================
     activeMask = abs(a) > 0;
-
     if any(activeMask)
         dqActive = dq(activeMask);
         aActive  = a(activeMask);
 
         dirTerms = sign(aActive) .* signWithDeadzoneVec(dqActive, 0.004);
-        dirScore = mean(dirTerms);    % approx in [-1,1]
+        dirScore = mean(dirTerms);
     else
         dirScore = 0;
     end
 
-    dirBonus = 0.36 * max(dirScore, 0);
+    dirBonus = 0.30 * max(dirScore, 0);
 
     % ========================================================
-    % 5) WRONG-DIRECTION PENALTY
-    % Stronger than v2
+    % 5) WRONG-DIRECTION PENALTY (stronger)
     % ========================================================
     if effectNorm > 0.025 && dirScore < 0
-        wrongDirPenalty = -0.55 * abs(dirScore);
+        wrongDirPenalty = -0.45 * abs(dirScore);
     else
         wrongDirPenalty = 0;
     end
 
     % ========================================================
     % 6) INTENTION TREND BONUS FROM q_ref
-    % q_ref is NOT a hard target, only an auxiliary trend signal
     % ========================================================
     refActiveMask = abs(dqRef) > 0.010;
 
@@ -5652,26 +5395,24 @@ function [reward, rewardVector, action] = legacy_distanceRewarding(this, action)
         refIntent = signWithDeadzoneVec(dqRef(refActiveMask), 0.010);
 
         trendTerms = dqIntent .* refIntent;
-        trendScore = mean(trendTerms);   % in [-1,1]
+        trendScore = mean(trendTerms);
     else
         trendScore = 0;
     end
 
-    intentionBonus = 0.30 * max(trendScore, 0);
+    intentionBonus = 0.25 * max(trendScore, 0);
 
     % ========================================================
-    % 7) CONTRADICTION PENALTY AGAINST INTENTION
-    % Stronger than v2
+    % 7) CONTRADICTION PENALTY AGAINST INTENTION (stronger)
     % ========================================================
     if any(refActiveMask) && trendScore < 0 && effectNorm > 0.025
-        contradictionPenalty = -0.60 * abs(trendScore);
+        contradictionPenalty = -0.50 * abs(trendScore);
     else
         contradictionPenalty = 0;
     end
 
     % ========================================================
     % 8) ANTI-REPEAT PENALTY
-    % Penalize long streaks of exactly the same action
     % ========================================================
     if isequal(action, prevAction)
         repeatCount = repeatCount + 1;
@@ -5687,7 +5428,6 @@ function [reward, rewardVector, action] = legacy_distanceRewarding(this, action)
 
     % ========================================================
     % 9) SHORT-WINDOW ACTION DIVERSITY BONUS
-    % Encourage local action variety, but keep it small
     % ========================================================
     actionHistory = [actionHistory(2:end,:); action(:)'];
     uniqueCount = size(unique(actionHistory, 'rows'), 1);
@@ -5700,7 +5440,6 @@ function [reward, rewardVector, action] = legacy_distanceRewarding(this, action)
 
     % ========================================================
     % 10) OVERSHOOT PENALTY
-    % Discourage excessively large motion bursts
     % ========================================================
     if effectNorm > 0.16
         overshootPenalty = -0.25 * (effectNorm - 0.16);
@@ -5710,7 +5449,6 @@ function [reward, rewardVector, action] = legacy_distanceRewarding(this, action)
 
     % ========================================================
     % 11) STABILITY BONUS
-    % Reward moderate, coherent, useful motion
     % ========================================================
     if effectNorm >= 0.025 && effectNorm <= 0.08 && dirScore > 0 && trendScore >= 0
         stabilityBonus = 0.14;
@@ -5733,12 +5471,8 @@ function [reward, rewardVector, action] = legacy_distanceRewarding(this, action)
            + overshootPenalty ...
            + stabilityBonus;
 
-    % Soft clipping
     reward = max(min(reward, 6), -6);
 
-    % ========================================================
-    % DIAGNOSTIC VECTOR
-    % ========================================================
     rewardVector = [moveReward, ...
                     deadPenalty, ...
                     activityBonus, ...
@@ -5752,44 +5486,310 @@ function [reward, rewardVector, action] = legacy_distanceRewarding(this, action)
                     stabilityBonus];
 
     % ========================================================
-    % UPDATE PERSISTENTS
+    % UPDATE
     % ========================================================
     prevQ = q;
     prevQRef = qRef;
     prevAction = action;
 end
 
-% ============================================================
-% Helper: get normalized q
-% ============================================================
 function q = getCurrentQ(this)
     if isprop(this, 'adjustEnc') && ~isempty(this.adjustEnc)
         q = this.adjustEnc(end,:)';
     elseif isprop(this, 'qLog') && ~isempty(this.qLog)
         q = this.qLog(end,:)';
     else
-        error('reward_encoder_intention_v3: No normalized q source found.');
+        error('reward_encoder_intention_v2: No normalized q source found.');
     end
 end
 
-% ============================================================
-% Helper: get q_ref-like intention signal
-% ============================================================
 function qRef = getCurrentQRef(this)
     if isprop(this, 'qRefLog') && ~isempty(this.qRefLog)
         qRef = this.qRefLog(end,:)';
     elseif isprop(this, 'flexConverted') && ~isempty(this.flexConverted)
         qRef = this.flexConverted(end,:)';
     else
-        error('reward_encoder_intention_v3: No qRef source found.');
+        error('reward_encoder_intention_v2: No qRef source found.');
     end
 end
 
-% ============================================================
-% Helper: sign with deadzone
-% ============================================================
 function s = signWithDeadzoneVec(x, thr)
     s = zeros(size(x));
-    s(x >  thr) =  1;
+    s(x > thr)  = 1;
     s(x < -thr) = -1;
 end
+
+
+
+
+
+% % % % % % % % % % % % % % % % % % % % %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% % % % % % % % % % % % % % % % % % % % % %%%%%%%%%%%%%%%% VERSION 33 reward hibrida usa dos bloques con q_ref pero no como principal mejora a V32 %%%%%%%%%%%%%%%%
+% % % % % % % % % % % % % % % % % % % % %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% % % % % % % % % % % % %
+% % %function [reward, rewardVector, action] = reward_encoder_intention_v3(this, action)
+% % ============================================================
+% % Reward v3: encoder control + intention guidance from q_ref
+% %
+% % Main idea:
+% % - Encourage useful physical movement of q
+% % - Discourage dead-zone
+% % - Reward consistency between action and observed dq
+% % - Use q_ref ONLY as intention/trend, NOT as tracking target
+% % - Discourage collapse to repeated actions
+% %
+% % Expected action:
+% %   action = 1x4 with values in {-1,0,1}
+% %
+% % Expected signals:
+% %   q    -> normalized encoder state
+% %   qRef -> auxiliary intention signal
+% %
+% % Output:
+% %   reward       -> scalar reward
+% %   rewardVector -> diagnostic decomposition
+% %
+% % ============================================================
+% 
+%     persistent prevQ prevQRef prevAction repeatCount actionHistory
+% 
+%     % ========================================================
+%     % RESET AT EPISODE START
+%     % ========================================================
+%     if isempty(prevQ) || this.c <= 1
+%         q    = getCurrentQ(this);
+%         qRef = getCurrentQRef(this);
+% 
+%         prevQ = q;
+%         prevQRef = qRef;
+%         prevAction = action;
+%         repeatCount = 0;
+% 
+%         % Short rolling window for local action diversity
+%         actionHistory = zeros(6, numel(action));
+% 
+%         reward = 0;
+%         rewardVector = zeros(1,11);
+%         return;
+%     end
+% 
+%     % ========================================================
+%     % CURRENT STATE
+%     % ========================================================
+%     q    = getCurrentQ(this);      % column vector
+%     qRef = getCurrentQRef(this);   % column vector
+% 
+%     dq    = q - prevQ;             % physical motion actually observed
+%     dqRef = qRef - prevQRef;       % intention / trend only
+% 
+%     a = action(:);
+%     effectNorm = norm(dq, 2);
+% 
+%     % ========================================================
+%     % 1) BASE MOVEMENT REWARD
+%     % Slightly reduced vs v2 so "moving" alone dominates less
+%     % ========================================================
+%     moveReward = 1.5 * tanh(8.0 * effectNorm);
+% 
+%     % ========================================================
+%     % 2) DEAD-ZONE PENALTY
+%     % Keep pressure against inactive behavior
+%     % ========================================================
+%     if effectNorm < 0.008
+%         deadPenalty = -1.40;
+%     elseif effectNorm < 0.018
+%         deadPenalty = -0.45;
+%     else
+%         deadPenalty = 0;
+%     end
+% 
+%     % ========================================================
+%     % 3) ACTIVITY BONUS
+%     % Reward moderate useful movement
+%     % ========================================================
+%     if effectNorm >= 0.02 && effectNorm <= 0.10
+%         activityBonus = 0.15;
+%     else
+%         activityBonus = 0;
+%     end
+% 
+%     % ========================================================
+%     % 4) ACTION -> MOVEMENT DIRECTION BONUS
+%     % Does commanded sign align with observed dq sign?
+%     % ========================================================
+%     activeMask = abs(a) > 0;
+% 
+%     if any(activeMask)
+%         dqActive = dq(activeMask);
+%         aActive  = a(activeMask);
+% 
+%         dirTerms = sign(aActive) .* signWithDeadzoneVec(dqActive, 0.004);
+%         dirScore = mean(dirTerms);    % approx in [-1,1]
+%     else
+%         dirScore = 0;
+%     end
+% 
+%     dirBonus = 0.36 * max(dirScore, 0);
+% 
+%     % ========================================================
+%     % 5) WRONG-DIRECTION PENALTY
+%     % Stronger than v2
+%     % ========================================================
+%     if effectNorm > 0.025 && dirScore < 0
+%         wrongDirPenalty = -0.55 * abs(dirScore);
+%     else
+%         wrongDirPenalty = 0;
+%     end
+% 
+%     % ========================================================
+%     % 6) INTENTION TREND BONUS FROM q_ref
+%     % q_ref is NOT a hard target, only an auxiliary trend signal
+%     % ========================================================
+%     refActiveMask = abs(dqRef) > 0.010;
+% 
+%     if any(refActiveMask)
+%         dqIntent  = signWithDeadzoneVec(dq(refActiveMask), 0.004);
+%         refIntent = signWithDeadzoneVec(dqRef(refActiveMask), 0.010);
+% 
+%         trendTerms = dqIntent .* refIntent;
+%         trendScore = mean(trendTerms);   % in [-1,1]
+%     else
+%         trendScore = 0;
+%     end
+% 
+%     intentionBonus = 0.30 * max(trendScore, 0);
+% 
+%     % ========================================================
+%     % 7) CONTRADICTION PENALTY AGAINST INTENTION
+%     % Stronger than v2
+%     % ========================================================
+%     if any(refActiveMask) && trendScore < 0 && effectNorm > 0.025
+%         contradictionPenalty = -0.60 * abs(trendScore);
+%     else
+%         contradictionPenalty = 0;
+%     end
+% 
+%     % ========================================================
+%     % 8) ANTI-REPEAT PENALTY
+%     % Penalize long streaks of exactly the same action
+%     % ========================================================
+%     if isequal(action, prevAction)
+%         repeatCount = repeatCount + 1;
+%     else
+%         repeatCount = 0;
+%     end
+% 
+%     if repeatCount >= 6
+%         repeatPenalty = -0.05 * min(repeatCount - 5, 12);
+%     else
+%         repeatPenalty = 0;
+%     end
+% 
+%     % ========================================================
+%     % 9) SHORT-WINDOW ACTION DIVERSITY BONUS
+%     % Encourage local action variety, but keep it small
+%     % ========================================================
+%     actionHistory = [actionHistory(2:end,:); action(:)'];
+%     uniqueCount = size(unique(actionHistory, 'rows'), 1);
+% 
+%     if this.c > 8
+%         diversityBonus = 0.05 * min(uniqueCount - 1, 4);
+%     else
+%         diversityBonus = 0;
+%     end
+% 
+%     % ========================================================
+%     % 10) OVERSHOOT PENALTY
+%     % Discourage excessively large motion bursts
+%     % ========================================================
+%     if effectNorm > 0.16
+%         overshootPenalty = -0.25 * (effectNorm - 0.16);
+%     else
+%         overshootPenalty = 0;
+%     end
+% 
+%     % ========================================================
+%     % 11) STABILITY BONUS
+%     % Reward moderate, coherent, useful motion
+%     % ========================================================
+%     if effectNorm >= 0.025 && effectNorm <= 0.08 && dirScore > 0 && trendScore >= 0
+%         stabilityBonus = 0.14;
+%     else
+%         stabilityBonus = 0;
+%     end
+% 
+%     % ========================================================
+%     % FINAL REWARD
+%     % ========================================================
+%     reward = moveReward ...
+%            + deadPenalty ...
+%            + activityBonus ...
+%            + dirBonus ...
+%            + wrongDirPenalty ...
+%            + intentionBonus ...
+%            + contradictionPenalty ...
+%            + repeatPenalty ...
+%            + diversityBonus ...
+%            + overshootPenalty ...
+%            + stabilityBonus;
+% 
+%     % Soft clipping
+%     reward = max(min(reward, 6), -6);
+% 
+%     % ========================================================
+%     % DIAGNOSTIC VECTOR
+%     % ========================================================
+%     rewardVector = [moveReward, ...
+%                     deadPenalty, ...
+%                     activityBonus, ...
+%                     dirBonus, ...
+%                     wrongDirPenalty, ...
+%                     intentionBonus, ...
+%                     contradictionPenalty, ...
+%                     repeatPenalty, ...
+%                     diversityBonus, ...
+%                     overshootPenalty, ...
+%                     stabilityBonus];
+% 
+%     % ========================================================
+%     % UPDATE PERSISTENTS
+%     % ========================================================
+%     prevQ = q;
+%     prevQRef = qRef;
+%     prevAction = action;
+% end
+% 
+% % ============================================================
+% % Helper: get normalized q
+% % ============================================================
+% function q = getCurrentQ(this)
+%     if isprop(this, 'adjustEnc') && ~isempty(this.adjustEnc)
+%         q = this.adjustEnc(end,:)';
+%     elseif isprop(this, 'qLog') && ~isempty(this.qLog)
+%         q = this.qLog(end,:)';
+%     else
+%         error('reward_encoder_intention_v3: No normalized q source found.');
+%     end
+% end
+% 
+% % ============================================================
+% % Helper: get q_ref-like intention signal
+% % ============================================================
+% function qRef = getCurrentQRef(this)
+%     if isprop(this, 'qRefLog') && ~isempty(this.qRefLog)
+%         qRef = this.qRefLog(end,:)';
+%     elseif isprop(this, 'flexConverted') && ~isempty(this.flexConverted)
+%         qRef = this.flexConverted(end,:)';
+%     else
+%         error('reward_encoder_intention_v3: No qRef source found.');
+%     end
+% end
+% 
+% % ============================================================
+% % Helper: sign with deadzone
+% % ============================================================
+% function s = signWithDeadzoneVec(x, thr)
+%     s = zeros(size(x));
+%     s(x >  thr) =  1;
+%     s(x < -thr) = -1;
+% end
