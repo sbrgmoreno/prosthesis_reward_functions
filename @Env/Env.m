@@ -81,6 +81,9 @@ classdef Env < rl.env.MATLABEnvironment
 
         % -- saving
         episode_folder; % episode output folder
+        
+        %%%%% EPISODE LOGS %%%%%%%
+        saveEpisodeLogs = false;
     end
 
     %% Properties that change during execution
@@ -259,6 +262,29 @@ classdef Env < rl.env.MATLABEnvironment
                 mkdir(this.episode_folder);
             end
             %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+            %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+            % =========================================================
+            % Episode logging configuration
+            % =========================================================
+            this.saveEpisodeLogs = configurables("saveEpisodeLogs");
+            
+            cfgEpisodeFolder = configurables("episode_folder");
+            
+            if strlength(string(cfgEpisodeFolder)) > 0
+                this.episode_folder = string(cfgEpisodeFolder);
+            else
+                % usar carpeta basada en agent_dir
+                runTag = ['EvalEpisodes_' char(configurables("actionMode")) '_' datestr(now,'yy-mm-dd_HH_MM_SS')];
+                runTag = regexprep(runTag, '[<>:"/\\|?*]', '_');
+                this.episode_folder = fullfile(char(this.episode_folder), runTag);
+            end
+            
+            if ~exist(this.episode_folder, "dir")
+                mkdir(this.episode_folder);
+            end
+            %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
 
             % --- hardware
             this.usePrerecorded = usePrerecorded;

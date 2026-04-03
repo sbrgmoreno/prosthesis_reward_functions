@@ -87,7 +87,7 @@ params.run_training = true;   %ENTRENAMIENTO!!!!!!
 if ~params.run_training
 
     params.simOpts = rlSimulationOptions('MaxSteps', 50,... %500 default    5000
-        'NumSimulations', 50, ... %default 1     50
+        'NumSimulations', 6, ... %default 1     50
         'StopOnError', 'on', ...%default on
         'UseParallel', false ...%default false
         );
@@ -119,7 +119,7 @@ end
 if ~params.newTraining
 
     params.agentFile = ...
-        "C:\trainedAgentsProtesisNew\00_oldy\_\DDQN_81_Espacio_Acciones\Num_Steps_100\Reward_EMG_d_dq\Reward_EMG_d_dq\V26_20000_Episodes\V26_20000_Episodes\26-03-26 23 34 11\Agent19000.mat";
+        "C:\trainedAgentsProtesisNew\00_oldy\_\DDQN_17_Action_Space_Hybrid\Num_Max_Steps_100\V30_3000_Episodes-20260401T174336Z-1-001\V30_3000_Episodes\26-03-31 22 39 52\Agent3000.mat";
     params.agent_id = 'best'; %'QRDQN_v6';%'best'; % or name
     % params.agentFile = ...
     %     ".\trainedAgents\Agent3.mat";
@@ -207,6 +207,11 @@ params.flagSaveTraining = true;
 params.agents_directory = @(agent_id, variant)(fullfile("C:\", ...
     "trainedAgentsProtesisNew", agent_id, variant, ...
     string(datetime("now","Format", "yy-MM-dd HH m s"))));
+
+
+% !!!!!!!!Guardar logs con saveEpisodesLogs
+params.saveEpisodeLogs = false;
+params.episode_folder = "";
 
 params.episode_save_freq = 1; % 1 saves every episode.
 
