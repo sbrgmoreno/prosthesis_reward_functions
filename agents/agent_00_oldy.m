@@ -166,21 +166,28 @@ agentOptions = rlDQNAgentOptions( ...
 % ============================================================
 % Exploración ajustada para evitar colapso temprano de política
 % ============================================================
-% agentOptions.EpsilonGreedyExploration.Epsilon = 1.0;
-% agentOptions.EpsilonGreedyExploration.EpsilonDecay = 5e-5;
-% agentOptions.EpsilonGreedyExploration.EpsilonMin = 0.05;
-
+%%%%%%%%%%%%%%% Original %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 agentOptions.EpsilonGreedyExploration.Epsilon = 1.0;
-agentOptions.EpsilonGreedyExploration.EpsilonDecay = 2e-5;
-agentOptions.EpsilonGreedyExploration.EpsilonMin = 0.10;
+agentOptions.EpsilonGreedyExploration.EpsilonDecay = 5e-5;
+agentOptions.EpsilonGreedyExploration.EpsilonMin = 0.05;
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+% agentOptions.EpsilonGreedyExploration.Epsilon = 1.0;
+% agentOptions.EpsilonGreedyExploration.EpsilonDecay = 2e-5;
+% agentOptions.EpsilonGreedyExploration.EpsilonMin = 0.10;
 
 agent = rlDQNAgent(critic, agentOptions);
 
 bufferLength = agentOptions.ExperienceBufferLength;
 perBuffer = rlPrioritizedReplayMemory(observationInfo, actionInfo, bufferLength);
+%%%%%%%%% Original %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% perBuffer.PriorityExponent = 0.6;
+% perBuffer.InitialImportanceSamplingExponent = 0.4;
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+perBuffer.PriorityExponent = 0.4;
+perBuffer.InitialImportanceSamplingExponent = 0.5;
 
-perBuffer.PriorityExponent = 0.6;
-perBuffer.InitialImportanceSamplingExponent = 0.4;
+
 perBuffer.NumAnnealingSteps = bufferLength;
 
 agent.ExperienceBuffer = perBuffer;
