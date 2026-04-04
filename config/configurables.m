@@ -69,9 +69,11 @@ params.verbose = true;  % print every statement verbose
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% PROBAR CON SPEED %%%%%%%%%%%%%%%%%%%%%%%%%
 params.actionGain = 1.0;
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% ESPACIO DE ACCIONES DE 9 %%%%%%%%%%%%%%%%%%%%%%%%%
-%params.actionMode = "unifyActions";
+%params.actionMode = "unifyActions"; %81 actions
 %params.actionMode = "single_motor_9";
-params.actionMode = "hybrid_17";
+%params.actionMode = "hybrid_17"; %*** mejor comportamiento hasta
+%04-04-2026
+params.actionMode = "structured_25";
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 
