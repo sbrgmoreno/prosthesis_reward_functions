@@ -73,7 +73,8 @@ params.actionGain = 1.0;
 %params.actionMode = "single_motor_9";
 %params.actionMode = "hybrid_17"; %*** mejor comportamiento hasta
 %04-04-2026
-params.actionMode = "structured_25";
+%params.actionMode = "structured_25";
+params.actionMode = "structured_23";
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 
