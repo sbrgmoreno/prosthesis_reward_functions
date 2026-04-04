@@ -181,11 +181,11 @@ agent = rlDQNAgent(critic, agentOptions);
 bufferLength = agentOptions.ExperienceBufferLength;
 perBuffer = rlPrioritizedReplayMemory(observationInfo, actionInfo, bufferLength);
 %%%%%%%%% Original %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% perBuffer.PriorityExponent = 0.6;
-% perBuffer.InitialImportanceSamplingExponent = 0.4;
+%perBuffer.PriorityExponent = 0.6;
+%perBuffer.InitialImportanceSamplingExponent = 0.4;
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-perBuffer.PriorityExponent = 0.4;
-perBuffer.InitialImportanceSamplingExponent = 0.5;
+perBuffer.PriorityExponent = 0.5;
+perBuffer.InitialImportanceSamplingExponent = 0.45;
 
 
 perBuffer.NumAnnealingSteps = bufferLength;
