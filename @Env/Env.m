@@ -83,7 +83,7 @@ classdef Env < rl.env.MATLABEnvironment
         episode_folder; % episode output folder
         
         %%%%% EPISODE LOGS %%%%%%%
-        saveEpisodeLogs = false;
+        saveEpisodeLogs = true;
     end
 
     %% Properties that change during execution

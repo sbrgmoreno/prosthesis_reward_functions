@@ -69,12 +69,13 @@ params.verbose = true;  % print every statement verbose
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% PROBAR CON SPEED %%%%%%%%%%%%%%%%%%%%%%%%%
 params.actionGain = 1.0;
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% ESPACIO DE ACCIONES DE 9 %%%%%%%%%%%%%%%%%%%%%%%%%
-%params.actionMode = "unifyActions"; %81 actions
+%params.actionMode = "global_3"; %3 acciones
+%params.actionMode = "full_81"; %81 actions
 %params.actionMode = "single_motor_9";
-%params.actionMode = "hybrid_17"; %*** mejor comportamiento hasta
+params.actionMode = "hybrid_17"; %*** mejor comportamiento hasta
 %04-04-2026
 %params.actionMode = "structured_25";
-params.actionMode = "structured_23";
+%params.actionMode = "structured_23";
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 
@@ -90,7 +91,7 @@ params.run_training = true;   %ENTRENAMIENTO!!!!!!
 if ~params.run_training
 
     params.simOpts = rlSimulationOptions('MaxSteps', 50,... %500 default    5000
-        'NumSimulations', 6, ... %default 1     50
+        'NumSimulations', 50, ... %default 1     50
         'StopOnError', 'on', ...%default on
         'UseParallel', false ...%default false
         );
@@ -122,7 +123,7 @@ end
 if ~params.newTraining
 
     params.agentFile = ...
-        "C:\trainedAgentsProtesisNew\00_oldy\_\DDQN_17_Action_Space_Hybrid\Num_Max_Steps_100\V30_3000_Episodes-20260401T174336Z-1-001\V30_3000_Episodes\26-03-31 22 39 52\Agent3000.mat";
+        "C:\trainedAgentsProtesisNew\00_oldy\_\DDQN_17_Action_Space_Hybrid\Num_Max_Steps_100\V32_3000_Episodes-20260405T021856Z-1-001\V32_3000_Episodes\26-04-02 22 57 10\Agent3000.mat";
     params.agent_id = 'best'; %'QRDQN_v6';%'best'; % or name
     % params.agentFile = ...
     %     ".\trainedAgents\Agent3.mat";
@@ -213,7 +214,7 @@ params.agents_directory = @(agent_id, variant)(fullfile("C:\", ...
 
 
 % !!!!!!!!Guardar logs con saveEpisodesLogs
-params.saveEpisodeLogs = false;
+params.saveEpisodeLogs = true;
 params.episode_folder = "";
 
 params.episode_save_freq = 1; % 1 saves every episode.
@@ -243,7 +244,7 @@ params.flexJoined_scale = @(x) x./[4092 2046 1023 2046];
 %%Para
 % Parameters that affect getObservationInfo()
 params.numEMGFeatures = 40;
-params.stateLength = 48 %EMG, q, dq; % 52; % 40 EMG + 4 q + 4 err + 4 dq 48; % 40 EMG + 4 q + 4 err %params.stateLength = 44; % num state features: EMG features + motors
+params.stateLength = 48; %EMG, q, dq; % 52; % 40 EMG + 4 q + 4 err + 4 dq 48; % 40 EMG + 4 q + 4 err %params.stateLength = 44; % num state features: EMG features + motors
 
 % -- Cinematic info: Encoder
 % max unreachable limits, uses the limit of the ring|little

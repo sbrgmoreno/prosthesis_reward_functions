@@ -9,7 +9,9 @@ function actionInfo = defineActionDiscreteInfo()
 % - actionMode = "full_81"         -> 81 joint actions
 % - actionMode = "single_motor_9"  -> 9 atomic actions
 % - actionMode = "hybrid_17"       -> 17 actions (9 atomic + 8 coordinated)
+% - actionMode = "structured_23"   -> 23 structured actions
 % - actionMode = "structured_25"   -> 25 structured actions
+% - actionMode = "global_3"        -> 3 global coordinated actions
 %
 % ============================================================
 
@@ -75,6 +77,14 @@ else
 
             actionInfo = rlFiniteSetSpec(num2cell(actions,2)');
 
+        case "global_3"
+            actions = [ ...
+                -1 -1 -1 -1;   % all -
+                 0  0  0  0;   % no-op
+                 1  1  1  1];  % all +
+
+            actionInfo = rlFiniteSetSpec(num2cell(actions,2)');
+
         case "structured_23"
             actions = [ ...
                 % ===== Group A: neutral =====
@@ -106,7 +116,7 @@ else
                  0  1  1  0;   % 20 m2,m3 +
                  0 -1 -1  0;   % 21 m2,m3 -
 
-                % ===== Group E: global/coarse coordinated actions (4) =====               
+                % ===== Group E: global/coarse coordinated actions (2) =====
                  1  1 -1 -1;   % 22 split pattern A
                 -1 -1  1  1];  % 23 split pattern B
 
