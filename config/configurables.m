@@ -69,10 +69,10 @@ params.verbose = true;  % print every statement verbose
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% PROBAR CON SPEED %%%%%%%%%%%%%%%%%%%%%%%%%
 params.actionGain = 1.0;
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% ESPACIO DE ACCIONES DE 9 %%%%%%%%%%%%%%%%%%%%%%%%%
-%params.actionMode = "global_3"; %3 acciones
+params.actionMode = "global_3"; %3 acciones
 %params.actionMode = "full_81"; %81 actions
 %params.actionMode = "single_motor_9";
-params.actionMode = "hybrid_17"; %*** mejor comportamiento hasta
+%params.actionMode = "hybrid_17"; %*** mejor comportamiento hasta
 %04-04-2026
 %params.actionMode = "structured_25";
 %params.actionMode = "structured_23";
@@ -97,7 +97,7 @@ if ~params.run_training
         );
 else
     params.RLtrainingOptions = rlTrainingOptions(...
-        'MaxEpisodes',500,... % when too many episodes it makes slower creating episode =20000000
+        'MaxEpisodes',3000,... % when too many episodes it makes slower creating episode =20000000
         'MaxStepsPerEpisode', params.maxNumberStepsInEpisodes,...
         'StopTrainingCriteria',"AverageReward",...
         'StopTrainingValue', 600,... % new rewards
