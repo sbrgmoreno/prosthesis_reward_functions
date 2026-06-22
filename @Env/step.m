@@ -15,6 +15,19 @@ function [observation, reward, isDone, loggedSignals] = step(this, action)
         this.dqLog            = NaN(this.maxNumberStepsInEpisodes, 4);
         this.aAppliedLog      = NaN(this.maxNumberStepsInEpisodes, 4);
         this.rewardLog        = NaN(this.maxNumberStepsInEpisodes, 1);
+        %---------------------------------
+        this.rewardProgressLog = NaN(this.maxNumberStepsInEpisodes, 1);
+        this.rewardAgreementLog = NaN(this.maxNumberStepsInEpisodes, 1);
+        this.rewardWrongDirLog = NaN(this.maxNumberStepsInEpisodes, 1);
+        this.rewardNearLog = NaN(this.maxNumberStepsInEpisodes, 1);
+        this.rewardSuccessLog = NaN(this.maxNumberStepsInEpisodes, 1);
+        this.rewardEffortLog = NaN(this.maxNumberStepsInEpisodes, 1);
+        this.rewardOscLog = NaN(this.maxNumberStepsInEpisodes, 1);
+        this.rewardDeadZoneLog = NaN(this.maxNumberStepsInEpisodes, 1);
+        this.rewardRawLog = NaN(this.maxNumberStepsInEpisodes, 1);
+        this.rewardClippedLog = NaN(this.maxNumberStepsInEpisodes, 1);
+        this.isClippedLog = false(this.maxNumberStepsInEpisodes, 1);
+        %---------------------------------
         this.effectNormLog    = NaN(this.maxNumberStepsInEpisodes, 1);
         this.dirAgreeLog      = false(this.maxNumberStepsInEpisodes, 4);
         this.dErrLog          = NaN(this.maxNumberStepsInEpisodes, 1);
@@ -32,6 +45,9 @@ function [observation, reward, isDone, loggedSignals] = step(this, action)
         this.encoderAdjustedLog  = cell(this.maxNumberStepsInEpisodes,1);
         this.flexConvertedLog    = cell(this.maxNumberStepsInEpisodes,1);
         this.encoderLog          = cell(this.maxNumberStepsInEpisodes,1);
+
+        
+
     end
 
     % Unify actions if needed (single action -> 4 motors)
@@ -88,8 +104,8 @@ function [observation, reward, isDone, loggedSignals] = step(this, action)
     CTRL_MAX = 255;
     actionApplied = max(min(actionApplied, CTRL_MAX), CTRL_MIN);
 
-    fprintf("[DBG] actionSat=%s | speeds=%s | actionApplied=%s\n", ...
-        mat2str(actionSat), mat2str(this.speeds), mat2str(actionApplied));
+    % fprintf("[DBG] actionSat=%s | speeds=%s | actionApplied=%s\n", ...
+    %     mat2str(actionSat), mat2str(this.speeds), mat2str(actionApplied));
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     % (2) APLICAR ACCIÓN
@@ -178,6 +194,7 @@ function [observation, reward, isDone, loggedSignals] = step(this, action)
 
     this.flexConverted = map_glove_to_encoder(flexRefRaw, qrefCalibLoaded);
 
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     % ===== q desde encoder crudo normalizado por motor =====
     encRawMat = this.motorData;          
     encRawLast = encRawMat(end,:);
@@ -190,6 +207,23 @@ function [observation, reward, isDone, loggedSignals] = step(this, action)
 
     this.adjustEnc = adjEnc;
 
+   %% ===== Corrección de q_ref por offset inicial + ganancia relativa =====
+
+    q_now = this.adjustEnc(end,:);
+    q_ref_raw = this.flexConverted;
+    
+    if this.c == 1
+        this.q0Episode = q_now;
+        this.qRef0Episode = q_ref_raw(end,:);
+    end
+    
+    q_ref_corrected = this.q0Episode + ...
+        (q_ref_raw - this.qRef0Episode) .* this.qRefGain;
+    
+    this.flexConverted = max(0, min(1, q_ref_corrected));
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
     if this.verbose && (this.c == 1 || mod(this.c,5) == 0)
         fprintf('\n[ENC DEBUG] step=%d\n', this.c);
         fprintf('encRaw(end,:)    = %s\n', mat2str(encRawLast,4));
@@ -200,21 +234,70 @@ function [observation, reward, isDone, loggedSignals] = step(this, action)
     this.State = this.calculateState(emg, motorData);
     observation = this.State;
 
+
+    %calcular q_ref_state y err_state
+    q_ref_state = observation(45:48)';   % q_ref_pred
+    err_state   = observation(49:52)';   % err_pred
+    
+    % Forzar que reward y métricas usen la misma referencia que el estado
+    this.flexConverted = q_ref_state;
+
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     % (5) REWARD
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    reward = 0;
-    rewardVector = zeros(1, expectedActionSize);
-
+    % reward = 0;
+    % rewardVector = zeros(1, expectedActionSize);
+    % 
+    % try
+    %     [reward, rewardVector, ~] = this.reward_function(this, actionSat);
+    % catch
+    %     try
+    %         [reward, rewardVector] = this.reward_function(this, actionSat);
+    %     catch
+    %         [reward, rewardVector, ~] = this.reward_function(this, actionSat, []);
+    %     end
+    % end
+    rewardInfo = struct();
+    
     try
-        [reward, rewardVector, ~] = this.reward_function(this, actionSat);
+        [reward, rewardVector, rewardInfo] = this.reward_function(this, actionSat);
     catch
         try
             [reward, rewardVector] = this.reward_function(this, actionSat);
+            rewardInfo = struct();
         catch
-            [reward, rewardVector, ~] = this.reward_function(this, actionSat, []);
+            [reward, rewardVector, rewardInfo] = this.reward_function(this, actionSat, []);
         end
     end
+
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    % ---- Extraer componentes de recompensa
+    rProgress = getfield_or_default(rewardInfo, "rProgress", NaN);
+    rAgreement = getfield_or_default(rewardInfo, "rAgreement", NaN);
+    rWrongDirection = getfield_or_default(rewardInfo, "rWrongDirection", NaN);
+    rNear = getfield_or_default(rewardInfo, "rNear", NaN);
+    rSuccess = getfield_or_default(rewardInfo, "rSuccess", NaN);
+    rEffort = getfield_or_default(rewardInfo, "rEffort", NaN);
+    rOscillation = getfield_or_default(rewardInfo, "rOscillation", NaN);
+    rDeadZone = getfield_or_default(rewardInfo, "rDeadZone", NaN);
+    rewardRaw = getfield_or_default(rewardInfo, "rewardRaw", reward);
+    rewardClipped = getfield_or_default(rewardInfo, "rewardClipped", reward);
+    isClipped = getfield_or_default(rewardInfo, "isClipped", false);
+
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+    % % ---- Default reward component values
+    % rProgress = NaN;
+    % rAgreement = NaN;
+    % rWrongDirection = NaN;
+    % rNear = NaN;
+    % rSuccess = NaN;
+    % rEffort = NaN;
+    % rOscillation = NaN;
+    % rDeadZone = NaN;
+    % rewardRaw = reward;
+    % rewardClipped = reward;
+    % isClipped = false;
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     % (6) MÉTRICAS POR STEP
@@ -222,6 +305,8 @@ function [observation, reward, isDone, loggedSignals] = step(this, action)
     q     = this.adjustEnc(end,:);
     q_ref = this.flexConverted(end,:);
     e     = q - q_ref;
+    
+
 
     t = this.c;
 
@@ -276,6 +361,21 @@ function [observation, reward, isDone, loggedSignals] = step(this, action)
     this.emgLog{this.c} = emg;
     this.encoderAdjustedLog{this.c} = this.adjustEnc;
     this.rewardLog(this.c) = reward;
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    %%%%%%%%%%%%%%%%DESCOMPOSICION REWARD %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    this.rewardProgressLog(this.c) = rProgress;
+    this.rewardAgreementLog(this.c) = rAgreement;
+    this.rewardWrongDirLog(this.c) = rWrongDirection;
+    this.rewardNearLog(this.c) = rNear;
+    this.rewardSuccessLog(this.c) = rSuccess;
+    this.rewardEffortLog(this.c) = rEffort;
+    this.rewardOscLog(this.c) = rOscillation;
+    this.rewardDeadZoneLog(this.c) = rDeadZone;
+    this.rewardRawLog(this.c) = rewardRaw;
+    this.rewardClippedLog(this.c) = rewardClipped;
+    this.isClippedLog(this.c) = isClipped;
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
     this.rewardIndividualLog{this.c} = rewardVector;
     this.flexConvertedLog{this.c} = this.flexConverted;
 
@@ -294,6 +394,10 @@ function [observation, reward, isDone, loggedSignals] = step(this, action)
         this.meanDistEpisode(this.episodeCount) = mean(this.meanDistLog(1:this.c), 'omitnan');
         this.successRateEpisode(this.episodeCount) = mean(this.successLog(1:this.c), 'omitnan');
         this.mseEpisode(this.episodeCount) = mean(this.mseLog(1:this.c), 'omitnan');
+
+        % ===== métricas de error norm por episodio =====
+        this.minErrNormEpisode(this.episodeCount) = min(this.errNormLog(1:this.c), [], 'omitnan');
+        this.finalErrNormEpisode(this.episodeCount) = this.errNormLog(this.c);
 
         % ===== métricas finales del episodio =====
         finalErr = abs(e);
@@ -348,18 +452,57 @@ function [observation, reward, isDone, loggedSignals] = step(this, action)
         if ~exist(outDir, "dir")
             mkdir(outDir);
         end
-
+        
         encoderDiag.episodeCount = this.episodeCount;
+        encoderDiag.episodeCounter = this.episodeCounter;
         encoderDiag.repetitionId = this.repetitionId;
         encoderDiag.episodeType  = this.episodeType;
         encoderDiag.steps        = this.c;
+        
+        % Señales principales
+        encoderDiag.encRawLog        = this.encRawLog(1:this.c,:);    % encoder crudo
+        encoderDiag.adjustEncLog     = this.qLog(1:this.c,:);         % q normalizado
+        encoderDiag.flexConvertedLog = this.qRefLog(1:this.c,:);      % q_ref calibrado
+        
+        % Dinámica
+        encoderDiag.dqLog            = this.dqLog(1:this.c,:);
+        encoderDiag.encEffectNormLog = this.encEffectNormLog(1:this.c,:);
+        encoderDiag.effectNormLog    = this.effectNormLog(1:this.c,:);
+        
+        % Error y recompensa
+        encoderDiag.errNormLog       = this.errNormLog(1:this.c,:);
+        encoderDiag.dErrLog          = this.dErrLog(1:this.c,:);
+        encoderDiag.rewardLog        = this.rewardLog(1:this.c,:);
 
-        encoderDiag.encRawLog        = this.encRawLog(1:this.c,:);
-        encoderDiag.adjustEncLog     = this.qLog(1:this.c,:);
-        encoderDiag.flexConvertedLog = this.qRefLog(1:this.c,:);
-
-        save(fullfile(outDir, sprintf("encoder_diag_ep_%04d.mat", this.episodeCount)), "encoderDiag");
-
+        % descomposicion reward
+        encoderDiag.rewardProgressLog = this.rewardProgressLog(1:this.c,:);
+        encoderDiag.rewardAgreementLog = this.rewardAgreementLog(1:this.c,:);
+        encoderDiag.rewardWrongDirLog = this.rewardWrongDirLog(1:this.c,:);
+        encoderDiag.rewardNearLog = this.rewardNearLog(1:this.c,:);
+        encoderDiag.rewardSuccessLog = this.rewardSuccessLog(1:this.c,:);
+        encoderDiag.rewardEffortLog = this.rewardEffortLog(1:this.c,:);
+        encoderDiag.rewardOscLog = this.rewardOscLog(1:this.c,:);
+        encoderDiag.rewardDeadZoneLog = this.rewardDeadZoneLog(1:this.c,:);
+        encoderDiag.rewardRawLog = this.rewardRawLog(1:this.c,:);
+        encoderDiag.rewardClippedLog = this.rewardClippedLog(1:this.c,:);
+        encoderDiag.isClippedLog = this.isClippedLog(1:this.c,:);
+        
+        % Acciones
+        encoderDiag.aRawLog          = this.aRawLog(1:this.c,:);
+        encoderDiag.aAppliedLog      = this.aAppliedLog(1:this.c,:);
+        encoderDiag.actionSatLog     = this.actionSatLog(1:this.c,:);
+        
+        % Métricas
+        encoderDiag.meanDistLog      = this.meanDistLog(1:this.c,:);
+        encoderDiag.mseLog           = this.mseLog(1:this.c,:);
+        encoderDiag.successLog       = this.successLog(1:this.c,:);
+        encoderDiag.nearSuccessLog   = this.nearSuccessLog(1:this.c,:);
+        
+        diagFile = fullfile(outDir, sprintf("encoder_diag_ep_%04d.mat", this.episodeCount));
+        save(diagFile, "encoderDiag");
+        
+        fprintf("\n[ENC DIAG SAVED] %s\n", diagFile);
+        
         % guardar logs funcionales del episodio
         if isprop(this, 'saveEpisodeLogs') && this.saveEpisodeLogs
             saveEpisodeLogs(this);
@@ -377,6 +520,15 @@ function [observation, reward, isDone, loggedSignals] = step(this, action)
     drawnow
 end
 
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+function value = getfield_or_default(S, fieldName, defaultValue)
+    if isstruct(S) && isfield(S, fieldName)
+        value = S.(fieldName);
+    else
+        value = defaultValue;
+    end
+end
 
 
 

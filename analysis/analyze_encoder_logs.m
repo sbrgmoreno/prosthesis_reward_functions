@@ -11,7 +11,7 @@ function results = analyze_encoder_logs(folderPath)
 %   results = analyze_encoder_logs;  % usa carpeta por defecto
 
     if nargin < 1 || isempty(folderPath)
-        folderPath = "encoder_diagnostics";
+        folderPath = "C:\trainedAgentsProtesisNew\00_oldy\_\26-06-04 17 30 58\EvalEpisodes_full_81_26-06-04_17_31_01\encoder_diagnostics";
     end
 
     files = dir(fullfile(folderPath, "encoder_diag_ep_*.mat"));

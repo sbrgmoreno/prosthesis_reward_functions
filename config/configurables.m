@@ -69,8 +69,8 @@ params.verbose = true;  % print every statement verbose
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% PROBAR CON SPEED %%%%%%%%%%%%%%%%%%%%%%%%%
 params.actionGain = 1.0;
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% ESPACIO DE ACCIONES DE 9 %%%%%%%%%%%%%%%%%%%%%%%%%
-params.actionMode = "global_3"; %3 acciones
-%params.actionMode = "full_81"; %81 actions
+%params.actionMode = "global_3"; %3 acciones
+params.actionMode = "full_81"; %81 actions
 %params.actionMode = "single_motor_9";
 %params.actionMode = "hybrid_17"; %*** mejor comportamiento hasta
 %04-04-2026
@@ -97,7 +97,7 @@ if ~params.run_training
         );
 else
     params.RLtrainingOptions = rlTrainingOptions(...
-        'MaxEpisodes',3000,... % when too many episodes it makes slower creating episode =20000000
+        'MaxEpisodes', 5000,... % when too many episodes it makes slower creating episode =20000000
         'MaxStepsPerEpisode', params.maxNumberStepsInEpisodes,...
         'StopTrainingCriteria',"AverageReward",...
         'StopTrainingValue', 600,... % new rewards
@@ -109,25 +109,29 @@ end
 
 
 %% RESUME TRAINING
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%new training %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 if params.run_training
 
     % true to start a new training, false to continue training from a
     % previous agent.
-     params.newTraining = true;
-     %params.newTraining = false;
+    params.newTraining = true;
+    %params.newTraining = false;
 else
      params.newTraining = false;
 end
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
 
 % --- resuming training or evaluation
 if ~params.newTraining
 
     params.agentFile = ...
-        "C:\trainedAgentsProtesisNew\00_oldy\_\DDQN_17_Action_Space_Hybrid\Num_Max_Steps_100\V32_3000_Episodes-20260405T021856Z-1-001\V32_3000_Episodes\26-04-02 22 57 10\Agent3000.mat";
+        "C:\trainedAgentsProtesisNew\00_oldy\_\26-06-20 10 34 23\Agent1000.mat";
     params.agent_id = 'best'; %'QRDQN_v6';%'best'; % or name
     % params.agentFile = ...
     %     ".\trainedAgents\Agent3.mat";
     % params.agent_id = 'random'; % or name
+    params.agent_id = 'resume_v262_1000';
 end
 
 
@@ -244,7 +248,7 @@ params.flexJoined_scale = @(x) x./[4092 2046 1023 2046];
 %%Para
 % Parameters that affect getObservationInfo()
 params.numEMGFeatures = 40;
-params.stateLength = 48; %EMG, q, dq; % 52; % 40 EMG + 4 q + 4 err + 4 dq 48; % 40 EMG + 4 q + 4 err %params.stateLength = 44; % num state features: EMG features + motors
+params.stateLength = 56; %88; %56; %52; %56; %48; %EMG, q, dq; % 52; % 40 EMG + 4 q + 4 err + 4 dq 48; % 40 EMG + 4 q + 4 err %params.stateLength = 44; % num state features: EMG features + motors
 
 % -- Cinematic info: Encoder
 % max unreachable limits, uses the limit of the ring|little

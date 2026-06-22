@@ -24,6 +24,20 @@ this.actionSatLog = nan(this.maxNumberStepsInEpisodes, 4);
 this.rewardLog = nan(this.maxNumberStepsInEpisodes, 1);
 %%%%%%%%%%%%%%%%%%%%%%%%----------------------%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%----------------------%%%%%%%%%%%%%%%%%%%%%%%%%
+this.rewardProgressLog = nan(this.maxNumberStepsInEpisodes, 1);
+this.rewardAgreementLog = nan(this.maxNumberStepsInEpisodes, 1);
+this.rewardWrongDirLog = nan(this.maxNumberStepsInEpisodes, 1);
+this.rewardNearLog = nan(this.maxNumberStepsInEpisodes, 1);
+this.rewardSuccessLog = nan(this.maxNumberStepsInEpisodes, 1);
+this.rewardEffortLog = nan(this.maxNumberStepsInEpisodes, 1);
+this.rewardOscLog = nan(this.maxNumberStepsInEpisodes, 1);
+this.rewardDeadZoneLog = nan(this.maxNumberStepsInEpisodes, 1);
+this.rewardRawLog = nan(this.maxNumberStepsInEpisodes, 1);
+this.rewardClippedLog = nan(this.maxNumberStepsInEpisodes, 1);
+this.isClippedLog = false(this.maxNumberStepsInEpisodes, 1);
+
+%%%%%%%%%%%%%%%%%%%%%%%%----------------------%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%----------------------%%%%%%%%%%%%%%%%%%%%%%%%%
 % ---- Per-step metric logs (new)
 this.meanDistLog = nan(this.maxNumberStepsInEpisodes, 1);
 this.mseLog      = nan(this.maxNumberStepsInEpisodes, 1);
@@ -57,6 +71,21 @@ this.encEffectNormLog = nan(this.maxNumberStepsInEpisodes, 1);
 %%%%%%%%%%%%%%%%%%%%%%%%----------------------%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%----------------------%%%%%%%%%%%%%%%%%%%%%%%%%
 
+%%%%%%%%%%%%%%%%%%%%%%%% Offset %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+this.qRefOffset = zeros(1,4);
+this.q0Episode = zeros(1,4);
+this.qRef0Episode = zeros(1,4);
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%%%%%%%%%%%%%%%%%%% Reiniciar memorias del estado %%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Reiniciar memorias del estado
+this.prevQ = [];
+this.prevQrefPred = [];
+% reiniciar historial
+this.stateHist = [];
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 if this.returnHomeAtEndEpisode
     drawnow

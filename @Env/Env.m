@@ -121,6 +121,20 @@ classdef Env < rl.env.MATLABEnvironment
         % dq_t y dq_t-1
         prevQ = [];
 
+
+        %%%%%%%%%%%%%% para suavizar prevé ras %%%%%
+        prevQrefPred = [];
+        %%%%%%%%%%%%% para crear Historial corto del estado cinemático/intención %%%%%%%%%%
+        stateHist = [];
+        %%%%%%%%%
+        qRefOffset = zeros(1,4);
+        %%%%%%%%%
+        q0Episode = zeros(1,4);
+        qRef0Episode = zeros(1,4);
+        qRefGain = [5.8396 1.5858 3.1275 0.7657];
+        %%%%%%%%%
+
+
         % --- logs: for saving episode recording data
         % timestamp of init of episode with and without home [reset]
         episodeTimestamp = [0, 0];
@@ -132,6 +146,23 @@ classdef Env < rl.env.MATLABEnvironment
         rewardLog = [];
         rewardIndividualLog = {};
         flexConvertedLog = {};
+
+
+        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        % ---- Reward component logs
+        rewardProgressLog = [];
+        rewardAgreementLog = [];
+        rewardWrongDirLog = [];
+        rewardNearLog = [];
+        rewardSuccessLog = [];
+        rewardEffortLog = [];
+        rewardOscLog = [];
+        rewardDeadZoneLog = [];
+        rewardRawLog = [];
+        rewardClippedLog = [];
+        isClippedLog = [];
+        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
         %%%%%%%%%%%%%%%%%%%%%%%%----------------------%%%%%%%%%%%%%%%%%%%%%%%%%
         %%%%%%%%%%%%%%%%%%%%%%%%----------------------%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -159,7 +190,14 @@ classdef Env < rl.env.MATLABEnvironment
         nearSuccessLog = [];
         %%%%%%%%%%%%%%%%%%%%%%%%----------------------%%%%%%%%%%%%%%%%%%%%%%%%%
         %%%%%%%%%%%%%%%%%%%%%%%%----------------------%%%%%%%%%%%%%%%%%%%%%%%%%
-        
+        %%%%%%%%%%%%%%%%%%%%%%%%----------------------%%%%%%%%%%%%%%%%%%%%%%%%%
+                         %      METRICAS DE ERR    %
+        %%%%%%%%%%%%%%%%%%%%%%%%----------------------%%%%%%%%%%%%%%%%%%%%%%%%%
+
+        minErrNormEpisode = [];
+        finalErrNormEpisode = [];
+        %%%%%%%%%%%%%%%%%%%%%%%%----------------------%%%%%%%%%%%%%%%%%%%%%%%%%
+        %%%%%%%%%%%%%%%%%%%%%%%%----------------------%%%%%%%%%%%%%%%%%%%%%%%%%
         %%%%%%%%%%%%%%%%%%%%%%%%----------------------%%%%%%%%%%%%%%%%%%%%%%%%%
                %      METRICAS PROMEDIO CADA 1000 ULTIMOS STEPS    %
         %%%%%%%%%%%%%%%%%%%%%%%%----------------------%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -190,6 +228,8 @@ classdef Env < rl.env.MATLABEnvironment
         encEffectNormLog = [];  % [maxSteps x 1] norm(dEncoderCrudo)
         %%%%%%%%%%%%%%%%%%%%%%%%----------------------%%%%%%%%%%%%%%%%%%%%%%%%%
         %%%%%%%%%%%%%%%%%%%%%%%%----------------------%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
 
         wait_in_step = false; % bool to wait period
     end
@@ -371,10 +411,27 @@ classdef Env < rl.env.MATLABEnvironment
             this.mseLog = [];
             this.successLog = [];
 
+            %----reward decomposition
+            this.rewardProgressLog = [];
+            this.rewardAgreementLog = [];
+            this.rewardWrongDirLog = [];
+            this.rewardNearLog = [];
+            this.rewardSuccessLog = [];
+            this.rewardEffortLog = [];
+            this.rewardOscLog = [];
+            this.rewardDeadZoneLog = [];
+            this.rewardRawLog = [];
+            this.rewardClippedLog = [];
+            this.isClippedLog = [];
+
+
             % ---- Historial de métricas finales por episodio
             this.finalMeanAbsErrEpisode = [];
             this.finalMaxAbsErrEpisode = [];
             this.nearSuccessEpisodeHistory = [];
+
+            this.minErrNormEpisode = [];
+            this.finalErrNormEpisode = [];
             %%%%%%%%%%%%%%%%%%%%%%%%----------------------%%%%%%%%%%%%%%%%%%%%%%%%%
             %%%%%%%%%%%%%%%%%%%%%%%%----------------------%%%%%%%%%%%%%%%%%%%%%%%%%
 

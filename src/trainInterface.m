@@ -119,9 +119,54 @@ if configs.run_training
     ylabel('MSE');
     grid on;
 
+    %%%%%%%%%%%%%%% graficas final errors %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    figure;
+    plot(env.finalMeanAbsErrEpisode, 'LineWidth', 1.5);
+    title('Final Mean Absolute Error per Episode');
+    xlabel('Episode');
+    ylabel('Final mean |q - q_{ref}|');
+    grid on;
+    
+    figure;
+    plot(env.finalMaxAbsErrEpisode, 'LineWidth', 1.5);
+    title('Final Max Absolute Error per Episode');
+    xlabel('Episode');
+    ylabel('Final max |q - q_{ref}|');
+    grid on;
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+    %%%%%%%%%%%%%%%%%%%%%% Error minimo y final error norm per episode %%%%
+    figure;
+    plot(env.minErrNormEpisode, 'LineWidth', 1.5);
+    title('Minimum Error Norm per Episode');
+    xlabel('Episode');
+    ylabel('min ||q - q_{ref}||');
+    grid on;
+    
+    figure;
+    plot(env.finalErrNormEpisode, 'LineWidth', 1.5);
+    title('Final Error Norm per Episode');
+    xlabel('Episode');
+    ylabel('final ||q - q_{ref}||');
+    grid on;
+     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+
     metrics.meanDist = env.meanDistEpisode;
     metrics.successRate = env.successRateEpisode;
     metrics.mse = env.mseEpisode;
+    
+    %%%%%%%%%%%%%%%%% aumento para errores finales %%%%%%%%%%%%%%%%%%%%%%%
+    metrics.finalMeanAbsErr = env.finalMeanAbsErrEpisode;
+    metrics.finalMaxAbsErr  = env.finalMaxAbsErrEpisode;
+    metrics.nearSuccessEpisode = env.nearSuccessEpisodeHistory;
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+    %%%%%%%%%%%%%%%%%%%% error min y final norm %%%%%%%%%%%%%%%%%%%%%%%%%%
+    metrics.minErrNorm = env.minErrNormEpisode;
+    metrics.finalErrNorm = env.finalErrNormEpisode;
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
     save(fullfile(agent_dir, "custom_metrics_V0.mat"), "metrics");
 
