@@ -18,10 +18,13 @@ criticNetwork = [
     fullyConnectedLayer(numActions, "Name", "output")
 ];
 
+useDevice = getTrainingDevice();
+
 opt = rlRepresentationOptions( ...
     'LearnRate', 1e-5, ...
     'L2RegularizationFactor', 5e-5, ...
-    'Optimizer', 'adam');
+    'Optimizer', 'adam', ...
+    'UseDevice', char(useDevice));
 
 opt.OptimizerParameters.GradientDecayFactor = 0.9;
 opt.OptimizerParameters.SquaredGradientDecayFactor = 0.999;

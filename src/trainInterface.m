@@ -96,59 +96,73 @@ if configs.run_training
 
     env.log("Starting training!");
     trainingInfo = train(agent, env, opts);  %!!!!!!!! ANTES DESCOMENTADO
+    %%%%%%%%%%%%%%%%%%%%%%%%%% CARPETA DE FIGURAS A GUARDAR %%%%%%%%%%%%%%
+    figDir = fullfile(agent_dir, "training_figures");
+    if ~exist(figDir, 'dir')
+        mkdir(figDir);
+    end
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %[agent, trainingInfo] = train(agent, env, opts);
 
-    figure;
+    f = figure;
     plot(env.meanDistEpisode, 'LineWidth', 1.5);
     title('Mean Absolute Distance per Episode');
     xlabel('Episode');
     ylabel('Mean |q - q_{ref}|');
     grid on;
+    exportgraphics(f, fullfile(figDir, "mean_absolute_distance.png"), 'Resolution', 200);
 
-    figure;
+    f = figure;
     plot(env.successRateEpisode, 'LineWidth', 1.5);
     title('Success Rate per Episode');
     xlabel('Episode');
     ylabel('Success Rate');
     grid on;
-
-    figure;
+    exportgraphics(f, fullfile(figDir, "success_rate.png"), 'Resolution', 200);
+    
+    f = figure;
     plot(env.mseEpisode, 'LineWidth', 1.5);
     title('MSE per Episode');
     xlabel('Episode');
     ylabel('MSE');
     grid on;
+    exportgraphics(f, fullfile(figDir, "mse.png"), 'Resolution', 200);
 
     %%%%%%%%%%%%%%% graficas final errors %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    figure;
+    f = figure;
     plot(env.finalMeanAbsErrEpisode, 'LineWidth', 1.5);
     title('Final Mean Absolute Error per Episode');
     xlabel('Episode');
     ylabel('Final mean |q - q_{ref}|');
     grid on;
+    exportgraphics(f, fullfile(figDir, "final_mean_absolute_error.png"), 'Resolution', 200);
     
-    figure;
+    f = figure;
     plot(env.finalMaxAbsErrEpisode, 'LineWidth', 1.5);
     title('Final Max Absolute Error per Episode');
     xlabel('Episode');
     ylabel('Final max |q - q_{ref}|');
     grid on;
+    exportgraphics(f, fullfile(figDir, "final_max_absolute_error.png"), 'Resolution', 200);
+
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
     %%%%%%%%%%%%%%%%%%%%%% Error minimo y final error norm per episode %%%%
-    figure;
+    f = figure;
     plot(env.minErrNormEpisode, 'LineWidth', 1.5);
     title('Minimum Error Norm per Episode');
     xlabel('Episode');
     ylabel('min ||q - q_{ref}||');
     grid on;
+    exportgraphics(f, fullfile(figDir, "minimum_error_norm.png"), 'Resolution', 200);
     
-    figure;
+    f = figure;
     plot(env.finalErrNormEpisode, 'LineWidth', 1.5);
     title('Final Error Norm per Episode');
     xlabel('Episode');
     ylabel('final ||q - q_{ref}||');
     grid on;
+    exportgraphics(f, fullfile(figDir, "final_error_norm.png"), 'Resolution', 200);
      %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 
@@ -169,6 +183,33 @@ if configs.run_training
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
     save(fullfile(agent_dir, "custom_metrics_V0.mat"), "metrics");
+    %%%%%%%%%%%%%%%%%% GUARDAR CSV %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    metricsTable = table( ...
+    (1:numel(metrics.meanDist))', ...
+    metrics.meanDist(:), ...
+    metrics.successRate(:), ...
+    metrics.mse(:), ...
+    metrics.finalMeanAbsErr(:), ...
+    metrics.finalMaxAbsErr(:), ...
+    metrics.minErrNorm(:), ...
+    metrics.finalErrNorm(:), ...
+    'VariableNames', { ...
+        'Episode', ...
+        'MeanDist', ...
+        'SuccessRate', ...
+        'MSE', ...
+        'FinalMeanAbsErr', ...
+        'FinalMaxAbsErr', ...
+        'MinErrNorm', ...
+        'FinalErrNorm' ...
+    });
+
+writetable(metricsTable, fullfile(agent_dir, "custom_metrics_V0.csv"));        
+    %%%%%%%%%%%%%%%%%% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+
+
 
 % else
 %     simpOpts = configs.simOpts;

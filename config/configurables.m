@@ -97,41 +97,43 @@ if ~params.run_training
         );
 else
     params.RLtrainingOptions = rlTrainingOptions(...
-        'MaxEpisodes', 5000,... % when too many episodes it makes slower creating episode =20000000
-        'MaxStepsPerEpisode', params.maxNumberStepsInEpisodes,...
-        'StopTrainingCriteria',"AverageReward",...
-        'StopTrainingValue', 600,... % new rewards
-        'SaveAgentCriteria','EpisodeFrequency', ...
-        'SaveAgentValue', 500 ...
-        ..., Plots="none" ... % debugging
-        );
+    'MaxEpisodes', 2,... % 5500 + 4500 = 10000 acumulados
+    'MaxStepsPerEpisode', params.maxNumberStepsInEpisodes,...
+    'StopTrainingCriteria',"AverageReward",...
+    'StopTrainingValue', 600,...
+    'SaveAgentCriteria','EpisodeFrequency', ...
+    'SaveAgentValue', 500, ...
+    'Plots',"training-progress" ...
+    );
 end
 
 
+% %% RESUME TRAINING
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%new training %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% if params.run_training
+% 
+%     % true to start a new training, false to continue training from a
+%     % previous agent.
+%     params.newTraining = true;
+%     %params.newTraining = false;
+% else
+%      params.newTraining = false;
+% end
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% RESUME TRAINING
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%new training %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-if params.run_training
-
-    % true to start a new training, false to continue training from a
-    % previous agent.
-    params.newTraining = true;
-    %params.newTraining = false;
-else
-     params.newTraining = false;
-end
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
+params.newTraining = false;   % continuar desde agente entrenado
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 % --- resuming training or evaluation
 if ~params.newTraining
 
     params.agentFile = ...
-        "C:\trainedAgentsProtesisNew\00_oldy\_\26-06-20 10 34 23\Agent1000.mat";
+        "C:\trainedAgentsProtesisNew\00_oldy\_\26-06-22 17 21 30\26-06-22 17 21 30\Agent5500.mat";
     params.agent_id = 'best'; %'QRDQN_v6';%'best'; % or name
     % params.agentFile = ...
     %     ".\trainedAgents\Agent3.mat";
     % params.agent_id = 'random'; % or name
-    params.agent_id = 'resume_v262_1000';
+    params.agent_id = 'resume_v263_5500_to_10000';
 end
 
 
