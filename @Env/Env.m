@@ -124,6 +124,8 @@ classdef Env < rl.env.MATLABEnvironment
 
         %%%%%%%%%%%%%% para suavizar prevé ras %%%%%
         prevQrefPred = [];
+        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        prevAction = zeros(4,1);
         %%%%%%%%%%%%% para crear Historial corto del estado cinemático/intención %%%%%%%%%%
         stateHist = [];
         %%%%%%%%%

@@ -515,6 +515,9 @@ function [observation, reward, isDone, loggedSignals] = step(this, action)
         end
     end
 
+    %---------- ACTUALIZACION ------------
+    this.prevAction = actionSat(:);
+    %----------------------
     notifyEnvUpdated(this);
     loggedSignals = [];
     drawnow

@@ -97,7 +97,7 @@ if ~params.run_training
         );
 else
     params.RLtrainingOptions = rlTrainingOptions(...
-    'MaxEpisodes', 2,... % 5500 + 4500 = 10000 acumulados
+    'MaxEpisodes', 1000,... % 5500 + 4500 = 10000 acumulados
     'MaxStepsPerEpisode', params.maxNumberStepsInEpisodes,...
     'StopTrainingCriteria',"AverageReward",...
     'StopTrainingValue', 600,...
@@ -109,19 +109,19 @@ end
 
 
 % %% RESUME TRAINING
-% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%new training %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% if params.run_training
-% 
-%     % true to start a new training, false to continue training from a
-%     % previous agent.
-%     params.newTraining = true;
-%     %params.newTraining = false;
-% else
-%      params.newTraining = false;
-% end
-% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%new training %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+if params.run_training
+
+    % true to start a new training, false to continue training from a
+    % previous agent.
+    params.newTraining = true;
+    %params.newTraining = false;
+else
+     params.newTraining = false;
+end
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% RESUME TRAINING
-params.newTraining = false;   % continuar desde agente entrenado
+%params.newTraining = false;   % continuar desde agente entrenado
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 % --- resuming training or evaluation
@@ -250,7 +250,7 @@ params.flexJoined_scale = @(x) x./[4092 2046 1023 2046];
 %%Para
 % Parameters that affect getObservationInfo()
 params.numEMGFeatures = 40;
-params.stateLength = 56; %88; %56; %52; %56; %48; %EMG, q, dq; % 52; % 40 EMG + 4 q + 4 err + 4 dq 48; % 40 EMG + 4 q + 4 err %params.stateLength = 44; % num state features: EMG features + motors
+params.stateLength = 60;  %56; %88; %56; %52; %56; %48; %EMG, q, dq; % 52; % 40 EMG + 4 q + 4 err + 4 dq 48; % 40 EMG + 4 q + 4 err %params.stateLength = 44; % num state features: EMG features + motors
 
 % -- Cinematic info: Encoder
 % max unreachable limits, uses the limit of the ring|little

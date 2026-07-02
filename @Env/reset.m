@@ -86,6 +86,8 @@ this.prevQrefPred = [];
 % reiniciar historial
 this.stateHist = [];
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+this.prevAction = zeros(4,1);
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 if this.returnHomeAtEndEpisode
     drawnow

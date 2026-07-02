@@ -151,8 +151,9 @@ numEMGFeatures = configurables("numEMGFeatures"); % 40
 numMotors = hardware.numMotors;                   % 4
 
 % Nuevo estado: EMG + q + q_ref + err + dq
-stateLength = numEMGFeatures + 4*numMotors;        % 40 + 16 = 56
+% stateLength = numEMGFeatures + 4*numMotors;        % 40 + 16 = 56
 
+stateLength = numEMGFeatures + 5*numMotors;  % 40 + 20 = 60
 % Ranges
 EMGFeaturesMin = -inf;
 EMGFeaturesMax = inf;
@@ -169,6 +170,11 @@ errMax = 1;
 dqMin = -1;
 dqMax = 1;
 
+%------------
+aPrevMin = -1;
+aPrevMax = 1;
+%------------
+
 %% creating observation space
 obsInfo = rlNumericSpec([stateLength 1]);
 
@@ -178,14 +184,16 @@ obsInfo.LowerLimit = [ ...
     qMin           * ones(numMotors, 1); ...
     qRefMin        * ones(numMotors, 1); ...
     errMin         * ones(numMotors, 1); ...
-    dqMin          * ones(numMotors, 1)];
+    dqMin          * ones(numMotors, 1); ...
+    aPrevMin       * ones(numMotors, 1)];
 
 obsInfo.UpperLimit = [ ...
     EMGFeaturesMax * ones(numEMGFeatures, 1); ...
     qMax           * ones(numMotors, 1); ...
     qRefMax        * ones(numMotors, 1); ...
     errMax         * ones(numMotors, 1); ...
-    dqMax          * ones(numMotors, 1)];
+    dqMax          * ones(numMotors, 1); ...
+    aPrevMax       * ones(numMotors, 1)];
 
 obsInfo.Name = 'prosthesis_state_56';
 obsInfo.Description = sprintf( ...

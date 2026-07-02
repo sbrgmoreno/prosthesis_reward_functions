@@ -77,7 +77,12 @@ function state = calculateState(this, emg, motorData)
     %% =========================================================
     % 6) estado final
     % =========================================================
-    state = [emg; q; q_ref_pred; err_pred; dq];
+    %state = [emg; q; q_ref_pred; err_pred; dq];
+
+    a_prev = this.prevAction(:);
+    a_prev = max(-1, min(1, a_prev));
+    
+    state = [emg; q; q_ref_pred; err_pred; dq; a_prev];
 
     % %% =========================================================
     % % 6) Estado con historial corto
