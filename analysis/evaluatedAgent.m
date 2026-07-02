@@ -13,7 +13,7 @@ clear functions;
 rehash;
 %% 0) Cargar agente entrenado
 % ---- CAMBIAR ESTA RUTA al agente que quieras evaluar ----
-agentFile = "C:\trainedAgentsProtesisNew\00_oldy\_\26-06-27 17 11 33_state_60_prefQ_20000\Agent20000.mat";
+agentFile = "C:\trainedAgentsProtesisNew\00_oldy\_\26-07-02 12 27 46_state_60_1000_Reward_264\Agent1000.mat";
 % ---------------------------------------------------------
 fprintf("Cargando agente: %s\n", agentFile);
 loadedData = load(agentFile);

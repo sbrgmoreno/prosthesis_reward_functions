@@ -8690,18 +8690,233 @@ function [reward, rewardVector, info] = legacy_distanceRewarding(this, action)
 
 
 
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%%%%%%%%%%%%%%%%%%%%%%%%% REWARD 2.6.4 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%%%%%%%%%%%%%%%%%%%%%%%%% STATE 60 CON a_PreQ%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% %%%%%%%%%%%%%%%%%%%%%%%%% REWARD 2.6.4 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% %%%%%%%%%%%%%%%%%%%%%%%%% STATE 60 CON a_PreQ%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% %function [reward, rewardVector, info] = legacy_distanceRewarding(this, action)
+% % Reward v2.6.4-State60
+% %
+% % Objetivo:
+% %   - Mantener la estructura exitosa de v2.6.3.
+% %   - Reducir la tendencia conservadora observada en State60.
+% %   - Penalizar dead-zone antes de alcanzar éxito.
+% %   - Premiar movimiento útil que realmente reduce el error.
+% %   - Penalizar suavemente acción cero cuando aún no se alcanzó éxito.
+% %
+% % Recomendada para:
+% %   State60 = 40 EMG + 4 q + 4 q_ref_pred + 4 err + 4 dq + 4 a_prev
+% 
+%     q     = this.adjustEnc(end,:);
+%     q_ref = this.flexConverted(end,:);
+% 
+%     e = q - q_ref;
+%     absErr = abs(e);
+% 
+%     currErrNorm = norm(e);
+%     meanAbsErr  = mean(absErr);
+% 
+%     %% Error anterior
+%     if this.c <= 1 || isempty(this.errNormLog) || isnan(this.errNormLog(max(1,this.c-1)))
+%         prevErrNorm = currErrNorm;
+%     else
+%         prevErrNorm = this.errNormLog(this.c-1);
+%     end
+% 
+%     dErr = prevErrNorm - currErrNorm;
+%     improved = dErr > 0;
+% 
+%     %% Movimiento real
+%     if this.c <= 1 || isempty(this.qLog) || any(isnan(this.qLog(max(1,this.c-1),:)))
+%         dq = zeros(1,4);
+%     else
+%         prevQ = this.qLog(this.c-1,:);
+%         dq = q - prevQ;
+%     end
+% 
+%     movement = norm(dq);
+%     usefulMove = movement > 0.01;
+% 
+%     %% Dirección
+%     desiredDir = sign(q_ref - q);
+%     actualDir  = sign(dq);
+% 
+%     agreementVec = (desiredDir == actualDir) & (actualDir ~= 0);
+%     wrongVec     = (desiredDir ~= actualDir) & (actualDir ~= 0);
+% 
+%     agreement = mean(double(agreementVec));
+%     wrongDirection = mean(double(wrongVec));
+% 
+%     %% Cercanía
+%     nearThrMean    = 0.30;
+%     successThrMean = 0.20;
+%     tightThrMean   = 0.12;
+% 
+%     nearBonus    = double(meanAbsErr < nearThrMean);
+%     successBonus = double(meanAbsErr < successThrMean);
+%     tightBonus   = double(meanAbsErr < tightThrMean);
+% 
+%     %% Permanencia
+%     if this.c <= 1 || isempty(this.meanDistLog) || isnan(this.meanDistLog(max(1,this.c-1)))
+%         prevMeanAbsErr = meanAbsErr;
+%     else
+%         prevMeanAbsErr = this.meanDistLog(this.c-1);
+%     end
+% 
+%     prevWasNear    = prevMeanAbsErr < nearThrMean;
+%     prevWasSuccess = prevMeanAbsErr < successThrMean;
+% 
+%     isNear    = meanAbsErr < nearThrMean;
+%     isSuccess = meanAbsErr < successThrMean;
+% 
+%     stayedNear    = prevWasNear && isNear;
+%     stayedSuccess = prevWasSuccess && isSuccess;
+% 
+%     leftNear    = prevWasNear && ~isNear;
+%     leftSuccess = prevWasSuccess && ~isSuccess;
+% 
+%     %% Penalizaciones auxiliares
+%     effort = mean(abs(action));
+% 
+%     if this.c <= 2 || isempty(this.dqLog) || any(isnan(this.dqLog(max(1,this.c-1),:)))
+%         oscPenalty = 0;
+%     else
+%         prevDQ = this.dqLog(this.c-1,:);
+%         oscPenalty = mean(abs(dq - prevDQ));
+%     end
+% 
+%     deadZone = movement < 1e-4;
+% 
+%     notSuccessful = meanAbsErr > successThrMean;
+%     farFromTarget = meanAbsErr > 0.35;
+% 
+%     zeroAction = all(action == 0);
+% 
+%     %% Reward v2.6.4-State60
+% 
+%     rProgress = ...
+%         + 3.5 * max(dErr,0) * double(usefulMove) ...
+%         - 2.5 * max(-dErr,0) * double(usefulMove);
+% 
+%     rDistance = -0.80 * meanAbsErr;
+% 
+%     rAgreement = +0.45 * agreement;
+%     rWrongDirection = -0.65 * wrongDirection;
+% 
+%     rNear    = +0.30 * nearBonus;
+%     rSuccess = +0.50 * successBonus;
+%     rTight   = +0.80 * tightBonus;
+% 
+%     rStayNear    = +0.30 * double(stayedNear);
+%     rStaySuccess = +0.45 * double(stayedSuccess);
+% 
+%     rLeaveNear    = -1.20 * double(leftNear);
+%     rLeaveSuccess = -1.50 * double(leftSuccess);
+% 
+%     rNoMoveFar = -0.35 * double(~usefulMove && farFromTarget);
+% 
+%     rEffort = -0.08 * effort;
+%     rOscillation = -0.20 * oscPenalty;
+% 
+%     % Cambio 1: penaliza dead-zone mientras no se haya alcanzado éxito.
+%     rDeadZone = -0.45 * double(deadZone && notSuccessful);
+% 
+%     % Cambio 2: premia movimiento útil que reduce error.
+%     rUsefulImprovement = +0.25 * double(usefulMove && improved);
+% 
+%     % Cambio 3: penaliza acción cero si todavía no está en zona de éxito.
+%     rZeroActionNotSuccess = -0.25 * double(zeroAction && notSuccessful);
+% 
+%     rewardRaw = ...
+%         rProgress + ...
+%         rDistance + ...
+%         rAgreement + ...
+%         rWrongDirection + ...
+%         rNear + ...
+%         rSuccess + ...
+%         rTight + ...
+%         rStayNear + ...
+%         rStaySuccess + ...
+%         rLeaveNear + ...
+%         rLeaveSuccess + ...
+%         rNoMoveFar + ...
+%         rEffort + ...
+%         rOscillation + ...
+%         rDeadZone + ...
+%         rUsefulImprovement + ...
+%         rZeroActionNotSuccess;
+% 
+%     reward = max(min(rewardRaw, 2.5), -2.5);
+%     isClipped = abs(rewardRaw) > 2.5;
+% 
+%     rewardVector = ...
+%         + 0.35 * double(agreementVec) ...
+%         - 0.45 * double(wrongVec) ...
+%         - 0.35 * absErr ...
+%         - 0.02 * abs(action);
+% 
+%     %% Info
+%     info.dErr = dErr;
+%     info.currErrNorm = currErrNorm;
+%     info.meanAbsErr = meanAbsErr;
+%     info.prevMeanAbsErr = prevMeanAbsErr;
+% 
+%     info.movement = movement;
+%     info.usefulMove = usefulMove;
+%     info.improved = improved;
+% 
+%     info.agreement = agreement;
+%     info.wrongDirection = wrongDirection;
+%     info.deadZone = deadZone;
+% 
+%     info.nearBonus = nearBonus;
+%     info.successBonus = successBonus;
+%     info.tightBonus = tightBonus;
+% 
+%     info.stayedNear = stayedNear;
+%     info.stayedSuccess = stayedSuccess;
+%     info.leftNear = leftNear;
+%     info.leftSuccess = leftSuccess;
+% 
+%     info.zeroAction = zeroAction;
+%     info.notSuccessful = notSuccessful;
+%     info.farFromTarget = farFromTarget;
+% 
+%     info.rProgress = rProgress;
+%     info.rDistance = rDistance;
+%     info.rAgreement = rAgreement;
+%     info.rWrongDirection = rWrongDirection;
+%     info.rNear = rNear;
+%     info.rSuccess = rSuccess;
+%     info.rTight = rTight;
+%     info.rStayNear = rStayNear;
+%     info.rStaySuccess = rStaySuccess;
+%     info.rLeaveNear = rLeaveNear;
+%     info.rLeaveSuccess = rLeaveSuccess;
+%     info.rNoMoveFar = rNoMoveFar;
+%     info.rEffort = rEffort;
+%     info.rOscillation = rOscillation;
+%     info.rDeadZone = rDeadZone;
+%     info.rUsefulImprovement = rUsefulImprovement;
+%     info.rZeroActionNotSuccess = rZeroActionNotSuccess;
+% 
+%     info.rewardRaw = rewardRaw;
+%     info.rewardClipped = reward;
+%     info.isClipped = isClipped;
+% end
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%% REWARD 2.6.5 %%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%% STATE 60 CON a_PrefQ %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %function [reward, rewardVector, info] = legacy_distanceRewarding(this, action)
-% Reward v2.6.4-State60
+% Reward v2.6.5-State60-Balanced
 %
 % Objetivo:
-%   - Mantener la estructura exitosa de v2.6.3.
-%   - Reducir la tendencia conservadora observada en State60.
-%   - Penalizar dead-zone antes de alcanzar éxito.
-%   - Premiar movimiento útil que realmente reduce el error.
-%   - Penalizar suavemente acción cero cuando aún no se alcanzó éxito.
+%   - Corregir el exceso de movimiento observado en v2.6.4.
+%   - Mantener bajo el dead-zone sin destruir la convergencia.
+%   - Premiar movimiento útil solo si reduce error.
+%   - Penalizar acción cero de forma más suave.
+%   - Reforzar distancia para evitar movimiento sin acercamiento.
 %
 % Recomendada para:
 %   State60 = 40 EMG + 4 q + 4 q_ref_pred + 4 err + 4 dq + 4 a_prev
@@ -8791,13 +9006,14 @@ function [reward, rewardVector, info] = legacy_distanceRewarding(this, action)
 
     zeroAction = all(action == 0);
 
-    %% Reward v2.6.4-State60
+    %% Reward v2.6.5-State60-Balanced
 
     rProgress = ...
         + 3.5 * max(dErr,0) * double(usefulMove) ...
         - 2.5 * max(-dErr,0) * double(usefulMove);
 
-    rDistance = -0.80 * meanAbsErr;
+    % Más fuerte que v2.6.3/v2.6.4 para evitar movimiento sin acercamiento.
+    rDistance = -1.20 * meanAbsErr;
 
     rAgreement = +0.45 * agreement;
     rWrongDirection = -0.65 * wrongDirection;
@@ -8812,19 +9028,20 @@ function [reward, rewardVector, info] = legacy_distanceRewarding(this, action)
     rLeaveNear    = -1.20 * double(leftNear);
     rLeaveSuccess = -1.50 * double(leftSuccess);
 
-    rNoMoveFar = -0.35 * double(~usefulMove && farFromTarget);
+    % Más suave que v2.6.4.
+    rNoMoveFar = -0.15 * double(~usefulMove && farFromTarget);
 
     rEffort = -0.08 * effort;
     rOscillation = -0.20 * oscPenalty;
 
-    % Cambio 1: penaliza dead-zone mientras no se haya alcanzado éxito.
-    rDeadZone = -0.45 * double(deadZone && notSuccessful);
+    % Castigo intermedio: evita dead-zone, pero sin forzar movimiento constante.
+    rDeadZone = -0.15 * double(deadZone && notSuccessful);
 
-    % Cambio 2: premia movimiento útil que reduce error.
-    rUsefulImprovement = +0.25 * double(usefulMove && improved);
+    % Premio más moderado que v2.6.4.
+    rUsefulImprovement = +0.12 * double(usefulMove && improved);
 
-    % Cambio 3: penaliza acción cero si todavía no está en zona de éxito.
-    rZeroActionNotSuccess = -0.25 * double(zeroAction && notSuccessful);
+    % Castigo suave a acción cero fuera de éxito.
+    rZeroActionNotSuccess = -0.08 * double(zeroAction && notSuccessful);
 
     rewardRaw = ...
         rProgress + ...
@@ -8903,4 +9120,3 @@ function [reward, rewardVector, info] = legacy_distanceRewarding(this, action)
     info.rewardClipped = reward;
     info.isClipped = isClipped;
 end
-
